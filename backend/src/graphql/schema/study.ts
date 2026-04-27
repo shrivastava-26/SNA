@@ -34,7 +34,7 @@ export const studySchema = `#graphql
     sponsor: String!
     phase: String!
     startDate: String!
-    endDate: String!
+    endDate: String
     description: String
   }
 
