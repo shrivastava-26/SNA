@@ -16,6 +16,7 @@ import Chip from '@mui/material/Chip';
 import AddLinkIcon from '@mui/icons-material/AddLink';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import HistoryIcon from '@mui/icons-material/History';
+import LockIcon from '@mui/icons-material/Lock';
 import { GridColDef } from '@mui/x-data-grid';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { DetailPageHeader } from '../../components/DetailPageHeader';
@@ -58,9 +59,10 @@ interface StudySitePanelProps {
   studyId: string;
   studySite: StudySite;
   refetchQuery: object;
+  readOnly?: boolean;
 }
 
-function StudySitePanel({ studyId, studySite, refetchQuery }: StudySitePanelProps) {
+function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: StudySitePanelProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { site, examiners: assignedExaminers, availableExaminers } = studySite;
 
@@ -75,6 +77,10 @@ function StudySitePanel({ studyId, studySite, refetchQuery }: StudySitePanelProp
   const isBusy = assigning || unassigning;
 
   async function handleToggle(examiner: Examiner, currentlyAssigned: boolean) {
+    if (readOnly) {
+      enqueueSnackbar('Completed studies are locked — examiner assignments cannot be changed.', { variant: 'warning' });
+      return;
+    }
     try {
       if (currentlyAssigned) {
         await unassignExaminer({ variables: { studyId, siteId: site.id, examinerId: examiner.id } });
@@ -112,7 +118,11 @@ function StudySitePanel({ studyId, studySite, refetchQuery }: StudySitePanelProp
         />
       </Box>
 
-      {availableExaminers.length === 0 ? (
+      {site.status === 'Closed' ? (
+        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+          This site is Closed — examiner assignments are not available for Closed sites.
+        </Typography>
+      ) : availableExaminers.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
           No examiners assigned to this site yet. Assign examiners to the site first.
         </Typography>
@@ -138,7 +148,7 @@ function StudySitePanel({ studyId, studySite, refetchQuery }: StudySitePanelProp
                   control={
                     <Checkbox
                       checked={isAssigned}
-                      disabled={isBusy}
+                      disabled={isBusy || readOnly}
                       onChange={() => handleToggle(examiner, isAssigned)}
                       size="small"
                       sx={{ color: '#0f766e', '&.Mui-checked': { color: '#0f766e' } }}
@@ -185,8 +195,10 @@ export function AdminStudyDetailPage() {
   const assignedSiteIds = new Set((study?.sites ?? []).map((s) => s.id));
   const unassignedSites = allSites.filter((s) => !assignedSiteIds.has(s.id));
 
+  const isCompleted = study?.status === 'Completed';
+
   async function handleAssignSite() {
-    if (!selectedSite) return;
+    if (!selectedSite || isCompleted) return;
     try {
       await assignSite({ variables: { studyId: id, siteId: selectedSite.id } });
       enqueueSnackbar(`${selectedSite.name} assigned to study.`, { variant: 'success' });
@@ -197,6 +209,10 @@ export function AdminStudyDetailPage() {
   }
 
   async function handleUnassignSite(siteId: string, siteName: string) {
+    if (isCompleted) {
+      enqueueSnackbar('Completed studies are locked — site assignments cannot be changed.', { variant: 'warning' });
+      return;
+    }
     try {
       await unassignSite({ variables: { studyId: id, siteId } });
       enqueueSnackbar(`${siteName} unassigned from study.`, { variant: 'info' });
@@ -211,14 +227,14 @@ export function AdminStudyDetailPage() {
     { field: 'city', headerName: 'City', width: 120 },
     { field: 'country', headerName: 'Country', width: 120 },
     { field: 'status', headerName: 'Status', width: 110, renderCell: (p) => <StatusChip status={p.value} /> },
-    {
+    ...(!isCompleted ? [{
       field: 'unassign', headerName: '', width: 110, sortable: false,
-      renderCell: (p) => (
+      renderCell: (p: { row: { id: string; name: string } }) => (
         <Button size="small" color="error" onClick={() => handleUnassignSite(p.row.id, p.row.name)}>
           Unassign
         </Button>
       ),
-    },
+    }] : []),
   ];
 
   const examinerColumns: GridColDef[] = [
@@ -279,36 +295,45 @@ export function AdminStudyDetailPage() {
             emptySubMessage="Use the picker below to assign a site."
           />
 
-          {/* Assign site picker */}
-          <Paper elevation={0} sx={{ p: 2.5, mb: 4, borderRadius: 2, border: '1px dashed #cbd5e1' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>Assign a Site</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-              Search by site code or name, then click Assign.
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-              <Autocomplete
-                options={unassignedSites}
-                value={selectedSite}
-                onChange={(_, value) => setSelectedSite(value)}
-                getOptionLabel={(o) => `${o.siteCode} — ${o.name}`}
-                isOptionEqualToValue={(o, v) => o.id === v.id}
-                noOptionsText={unassignedSites.length === 0 ? 'All sites are already assigned' : 'No sites match'}
-                renderInput={(params) => (
-                  <TextField {...params} size="small" placeholder="Search site code or name…" sx={{ bgcolor: 'background.paper' }} />
-                )}
-                sx={{ flex: 1, minWidth: 260 }}
-              />
-              <Button
-                variant="contained"
-                startIcon={<AddLinkIcon />}
-                onClick={handleAssignSite}
-                disabled={!selectedSite || assigning}
-                sx={{ whiteSpace: 'nowrap', height: 40 }}
-              >
-                {assigning ? 'Assigning…' : 'Assign'}
-              </Button>
-            </Box>
-          </Paper>
+          {/* Completed study lock banner */}
+          {isCompleted && (
+            <Alert severity="info" icon={<LockIcon fontSize="small" />} sx={{ mb: 3 }}>
+              This study is <strong>Completed</strong> — site and examiner assignments are locked and cannot be modified.
+            </Alert>
+          )}
+
+          {/* Assign site picker — hidden for completed studies */}
+          {!isCompleted && (
+            <Paper elevation={0} sx={{ p: 2.5, mb: 4, borderRadius: 2, border: '1px dashed #cbd5e1' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>Assign a Site</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                Search by site code or name, then click Assign.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                <Autocomplete
+                  options={unassignedSites}
+                  value={selectedSite}
+                  onChange={(_, value) => setSelectedSite(value)}
+                  getOptionLabel={(o) => `${o.siteCode} — ${o.name}`}
+                  isOptionEqualToValue={(o, v) => o.id === v.id}
+                  noOptionsText={unassignedSites.length === 0 ? 'All sites are already assigned' : 'No sites match'}
+                  renderInput={(params) => (
+                    <TextField {...params} size="small" placeholder="Search site code or name…" sx={{ bgcolor: 'background.paper' }} />
+                  )}
+                  sx={{ flex: 1, minWidth: 260 }}
+                />
+                <Button
+                  variant="contained"
+                  startIcon={<AddLinkIcon />}
+                  onClick={handleAssignSite}
+                  disabled={!selectedSite || assigning}
+                  sx={{ whiteSpace: 'nowrap', height: 40 }}
+                >
+                  {assigning ? 'Assigning…' : 'Assign'}
+                </Button>
+              </Box>
+            </Paper>
+          )}
 
           {/* Per-site examiner assignment */}
           {(study.studySites ?? []).length > 0 && (
@@ -332,6 +357,7 @@ export function AdminStudyDetailPage() {
                   studyId={id!}
                   studySite={ss}
                   refetchQuery={refetchQuery}
+                  readOnly={isCompleted}
                 />
               ))}
             </Box>

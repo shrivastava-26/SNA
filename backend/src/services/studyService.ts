@@ -389,7 +389,14 @@ export function assignExaminerToStudySite(
       extensions: { code: 'BAD_USER_INPUT', fieldErrors: { siteId: 'Site is not assigned to this study' } },
     });
   }
-  // Rule (b): examiner must be assigned to the site
+  // Rule (b): site must not be Closed
+  const site = queryOne<SiteRow>('SELECT * FROM sites WHERE id = ?', [siteId]);
+  if (site?.status === 'Closed') {
+    throw new GraphQLError('Cannot assign an examiner from a Closed site to a study.', {
+      extensions: { code: 'BAD_USER_INPUT', fieldErrors: { siteId: 'This site is Closed. Examiners from Closed sites cannot be assigned to a study.' } },
+    });
+  }
+  // Rule (c): examiner must be assigned to the site
   if (!queryOne('SELECT 1 FROM site_examiners WHERE site_id = ? AND examiner_id = ?', [siteId, examinerId])) {
     throw new GraphQLError('Examiner is not assigned to this site', {
       extensions: { code: 'BAD_USER_INPUT', fieldErrors: { examinerId: 'Examiner is not assigned to this site' } },

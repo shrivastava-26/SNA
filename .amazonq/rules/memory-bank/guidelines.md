@@ -193,12 +193,14 @@ async function onSubmit(values) {
 ```
 
 ### Entity Audit History Pattern
-- `EntityAuditHistoryPage` is a shared full-page component accepting `entityType`, `backTo`, `backLabel`, `entityLabel` props
-- Thin wrappers `StudyAuditHistoryPage`, `SiteAuditHistoryPage`, `ExaminerAuditHistoryPage` each fetch their entity label and delegate to `EntityAuditHistoryPage`
-- Uses server-side pagination via `GET_AUDIT_LOGS_QUERY` with `entityType` + `entityId` + `page` + `pageSize`
-- Each row has an expand toggle; expanded rows render an inline `DiffDetail` panel (before→after per field, CREATE shows all fields in green)
-- `EntityAuditLogDialog` is an alternative modal variant (non-paginated, limit 100) used inline from detail pages
-- Both share the same `diffObjects` / `FIELD_LABELS` diff logic — field keys mapped to human-readable labels
+- `EntityAuditHistoryPage` is a shared full-page component accepting `entityType`, `backLabel`, `entityLabel` props
+- Thin wrappers `StudyAuditHistoryPage`, `SiteAuditHistoryPage`, `ExaminerAuditHistoryPage` are truly minimal — no entity fetching, just pass `entityType` + `backLabel`
+- Uses `useParams` to get `id`, `useSearchParams` to persist `page`/`pageSize` in URL (same replace:true pattern as `useUrlPagination`)
+- Uses MUI `Table` + `TablePagination` (not DataGrid) — same pattern as `AuditLogsPage`
+- Accordion expand: only one row open at a time (`expandedRow` state holds single string id)
+- Back navigation uses `navigate(-1)` — restores browser history correctly
+- `EntityAuditLogDialog` is an alternative modal variant (non-paginated, `page:1 pageSize:100`) used inline from detail pages
+- Both share `fieldLabel()`, `parseJson()`, `diffObjects()` from `utils/auditDiff.ts`
 - Routes: `/admin/studies/:id/history`, `/admin/sites/:id/history`, `/admin/examiners/:id/history`
 
 ### GET_AUDIT_LOGS_QUERY Signature

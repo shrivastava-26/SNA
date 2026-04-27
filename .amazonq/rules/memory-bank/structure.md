@@ -33,7 +33,7 @@ SNA-y2/
 │   │   ├── services/
 │   │   │   ├── authService.ts   # loginUser (includes role in JWT), getUserById
 │   │   │   ├── studyService.ts  # getStudiesPaged, CRUD, assignSiteToStudy, unassignSiteFromStudy, getStudySitesWithStudyExaminers, assignExaminerToStudySite, unassignExaminerFromStudySite
-│   │   │   ├── siteService.ts   # getSitesPaged, CRUD, assignExaminerToSite, unassignExaminerFromSite (with domain rules P1/P2)
+│   │   │   ├── siteService.ts   # getSitesPaged, CRUD (createSite always Planned, SITE_UPDATE_COLUMNS allowlist, P1/P2 rules), assignExaminerToSite, unassignExaminerFromSite
 │   │   │   ├── examinerService.ts # getExaminersPaged, CRUD, getStudiesByExaminer, getSitesByExaminer
 │   │   │   ├── searchService.ts # globalSearch — keyword LIKE queries across all 3 entities with filters
 │   │   │   └── auditService.ts  # getAuditLogs — filtered by entityType, ordered DESC
@@ -107,9 +107,9 @@ SNA-y2/
     │   │   │   ├── ExaminersPage.tsx      # AdminExaminersPage — server-paginated DataGrid + CreateExaminerDialog + EditExaminerDialog
     │   │   │   ├── ExaminerDetailPage.tsx # AdminExaminerDetailPage — examiner info + linked studies + sites (read-only)
     │   │   │   ├── ExaminerAuditHistoryPage.tsx # Thin wrapper → EntityAuditHistoryPage for Examiner entity
-    │   │   │   ├── EntityAuditHistoryPage.tsx   # Shared full-page audit history: server-paginated DataGrid + expandable inline diff panels
+    │   │   │   ├── EntityAuditHistoryPage.tsx   # Shared full-page audit history: MUI Table + TablePagination + accordion expand + URL-persisted pagination
     │   │   │   ├── SearchPage.tsx         # AdminSearchPage — thin wrapper → shared SearchPage with AdminLayout
-    │   │   │   └── AuditLogsPage.tsx      # AuditLogsPage — audit log DataGrid (ADMIN only, fetchPolicy: network-only, limit 200)
+    │   │   │   └── AuditLogsPage.tsx      # AuditLogsPage — MUI Table + TablePagination, entity type filter, accordion expand (ADMIN only, fetchPolicy: network-only)
     │   │   ├── viewer/
     │   │   │   ├── DashboardPage.tsx      # ViewerDashboardPage — read-only charts + stats (no specialty chart), uses DashboardSkeleton
     │   │   │   ├── StudiesPage.tsx        # ViewerStudiesPage — server-paginated read-only DataGrid
@@ -165,9 +165,6 @@ SNA-y2/
 /admin/examiners/:id/history    → AdminRoute → ExaminerAuditHistoryPage
 /admin/search                   → AdminRoute → AdminSearchPage
 /admin/audit-logs               → AdminRoute → AuditLogsPage
-/admin/studies/:id/history      → AdminRoute → StudyAuditHistoryPage
-/admin/sites/:id/history        → AdminRoute → SiteAuditHistoryPage
-/admin/examiners/:id/history    → AdminRoute → ExaminerAuditHistoryPage
 
 /viewer/dashboard               → ProtectedRoute → ViewerDashboardPage
 /viewer/studies                 → ProtectedRoute → ViewerStudiesPage
