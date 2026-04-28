@@ -20,6 +20,12 @@
 | Env loading       | dotenv 16.4                |
 | Validation        | zod 4.3                    |
 | Dev server        | ts-node-dev 2.0            |
+| Security headers  | helmet 8.1                 |
+| Rate limiting     | express-rate-limit 8.4     |
+| HTTP logging      | morgan 1.10                |
+| Structured logging| winston 3.19               |
+| Batch loading     | dataloader 2.2             |
+| Testing           | vitest 3.2 + supertest 7.2 |
 
 ## Frontend
 | Concern           | Library / Version          |
@@ -46,6 +52,9 @@ npm install
 npm run dev      # ts-node-dev --respawn --transpile-only src/server.ts
 npm run build    # tsc → dist/
 npm start        # node dist/server.js
+npm test         # vitest run (unit + integration)
+npm run test:watch    # vitest watch mode
+npm run test:coverage # vitest with v8 coverage
 ```
 
 ### Frontend

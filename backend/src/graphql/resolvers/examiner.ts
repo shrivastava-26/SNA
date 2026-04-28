@@ -65,8 +65,8 @@ export const examinerResolvers = {
   },
 
   Examiner: {
-    studies(parent: ExaminerRow) { return getStudiesByExaminer(parent.id); },
-    sites(parent: ExaminerRow) { return getSitesByExaminer(parent.id); },
-    certificates(parent: ExaminerRow) { return getCertificatesByExaminer(parent.id); },
+    studies(parent: ExaminerRow, _: unknown, context: GraphQLContext) { return context.loaders.studiesByExaminerId.load(parent.id); },
+    sites(parent: ExaminerRow, _: unknown, context: GraphQLContext) { return context.loaders.sitesByExaminerId.load(parent.id); },
+    certificates(parent: ExaminerRow, _: unknown, context: GraphQLContext) { return context.loaders.certificatesByExaminerId.load(parent.id); },
   },
 };

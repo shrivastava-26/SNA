@@ -88,8 +88,8 @@ export const studyResolvers = {
   },
 
   Study: {
-    sites(parent: StudyRow) { return getSitesByStudy(parent.id); },
-    examiners(parent: StudyRow) { return getExaminersByStudy(parent.id); },
+    sites(parent: StudyRow, _: unknown, context: GraphQLContext) { return context.loaders.sitesByStudyId.load(parent.id); },
+    examiners(parent: StudyRow, _: unknown, context: GraphQLContext) { return context.loaders.examinersByStudyId.load(parent.id); },
     studySites(parent: StudyRow) { return getStudySitesWithStudyExaminers(parent.id); },
   },
 };

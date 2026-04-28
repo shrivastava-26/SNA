@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Loaders } from '../graphql/loaders';
 
 export interface UserRow {
   id: number;
@@ -66,4 +67,6 @@ export interface JwtPayload {
 export interface GraphQLContext {
   user: JwtPayload | null;
   res: Response;
+  requestId: string;
+  loaders: Loaders;
 }

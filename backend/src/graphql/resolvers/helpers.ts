@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { GraphQLContext } from '../../types';
-import { getDb } from '../../db/connection';
+import { insertAuditLog } from '../../repositories/auditRepository';
 
 export function requireAuth(context: GraphQLContext): void {
   if (!context.user) {
@@ -24,11 +24,5 @@ export function logAudit(
   afterJson: string | null
 ): void {
   const user = context.user!;
-  const db = getDb();
-  // Email is stored in the JWT payload — no extra DB lookup needed
-  const actorEmail = user.email;
-  db.prepare(
-    `INSERT INTO audit_logs (actorUserId, actorEmail, action, entityType, entityId, beforeJson, afterJson)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(user.userId, actorEmail, action, entityType, entityId, beforeJson, afterJson);
+  insertAuditLog(user.userId, user.email, action, entityType, entityId, beforeJson, afterJson);
 }

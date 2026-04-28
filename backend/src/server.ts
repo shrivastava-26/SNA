@@ -3,6 +3,7 @@ import { initConnection } from './db/connection';
 import { initDb } from './db/migrate';
 import { createApp } from './app';
 import { envSchema } from './validation/envSchema';
+import logger from './logger/logger';
 
 function validateEnv(): void {
   const result = envSchema.safeParse(process.env);
@@ -22,8 +23,8 @@ async function start() {
   const port = Number(process.env.PORT ?? 4000);
 
   app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}/graphql`);
+    logger.info(`Server running at http://localhost:${port}/graphql`);
   });
 }
 
-start().catch(console.error);
+start().catch((err) => logger.error('Failed to start server', { err }));

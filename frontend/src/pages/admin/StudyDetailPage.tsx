@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useMutation } from '@apollo/client';
+import { useMutation, DocumentNode } from '@apollo/client';
 import { useSnackbar } from 'notistack';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -28,7 +28,7 @@ import { RelatedDataGrid } from '../../components/RelatedDataGrid';
 import { StatusChip } from '../../components/StatusChip';
 import { DetailPageSkeleton } from '../../components/skeletons';
 import { useStudy } from '../../hooks/useStudy';
-import { useSitesPicker } from '../../hooks/useSitesPicker';
+import { useSitesPickerLazy } from '../../hooks/useSitesPicker';
 import {
   ASSIGN_SITE_TO_STUDY,
   UNASSIGN_SITE_FROM_STUDY,
@@ -101,10 +101,15 @@ function CertificatePickerDialog(
 }
 
 // ── Per-site examiner assignment panel ────────────────────────────────────────
+interface RefetchQuery {
+  query: DocumentNode;
+  variables: Record<string, unknown>;
+}
+
 interface StudySitePanelProps {
   studyId: string;
   studySite: StudySite;
-  refetchQuery: object;
+  refetchQuery: RefetchQuery;
   readOnly?: boolean;
 }
 
@@ -275,10 +280,10 @@ export function AdminStudyDetailPage() {
 
   const { study, loading, error } = useStudy(id);
   const isCompleted = study?.status === 'Completed';
-  const { sites: allSites } = useSitesPicker(!study || isCompleted);
+  const { load: loadSites, sites: allSites } = useSitesPickerLazy();
 
   const refetchQuery = { query: GET_STUDY_QUERY, variables: { id } };
-  const refetchOptions = { refetchQueries: [refetchQuery] };
+  const refetchOptions = { refetchQueries: [refetchQuery] as [typeof refetchQuery] };
 
   const [assignSite, { loading: assigning }] = useMutation(ASSIGN_SITE_TO_STUDY, refetchOptions);
   const [unassignSite] = useMutation(UNASSIGN_SITE_FROM_STUDY, refetchOptions);
@@ -406,6 +411,7 @@ export function AdminStudyDetailPage() {
                 <Autocomplete
                   options={unassignedSites}
                   value={selectedSite}
+                  onOpen={() => loadSites()}
                   onChange={(_, value) => setSelectedSite(value)}
                   getOptionLabel={(o) => `${o.siteCode} — ${o.name}`}
                   isOptionEqualToValue={(o, v) => o.id === v.id}

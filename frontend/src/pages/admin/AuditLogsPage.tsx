@@ -92,7 +92,6 @@ export function AuditLogsPage() {
 
   const { data, loading, error } = useQuery(GET_AUDIT_LOGS_QUERY, {
     variables: { entityType: entityTypeFilter || undefined, page: page + 1, pageSize },
-    fetchPolicy: 'network-only',
   });
 
   const rows: AuditLog[] = data?.getAuditLogs?.rows ?? [];

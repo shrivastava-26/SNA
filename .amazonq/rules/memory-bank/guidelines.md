@@ -34,16 +34,18 @@
 
 ### Backend — Layered Architecture
 ```
-Request → app.ts (JWT cookie extraction, role decoded into context)
+Request → app.ts (helmet, requestId, morgan/winston logging, JWT cookie extraction, role decoded into context)
   → Apollo resolver (requireAuth / requireAdmin via helpers.ts)
     → parseOrThrow(zodSchema, input)  ← Zod validation
       → service function (business logic + domain rules)
-        → db/query.ts helper (queryAll / queryOne)
+        → repository function (raw SQL via db/query.ts helpers)
           → better-sqlite3 (synchronous)
 ```
 - Resolvers never touch the DB directly — always go through a service
-- Services never import from resolvers — one-way dependency
+- Services contain only business logic — all raw SQL lives in `repositories/`
+- Repositories never import from services — one-way dependency
 - `getDb()` singleton — call it inside functions, never at module load time
+- `createLoaders()` called per-request in Apollo context — DataLoaders prevent N+1 on type field resolvers
 
 ### Role-Based Auth Guards
 ```typescript
@@ -81,7 +83,7 @@ When viewing audit history for a specific entity, the frontend queries multiple 
 const RELATED_ENTITY_TYPES: Record<string, string[]> = {
   Study: ['Study', 'StudySite', 'StudySiteExaminer'],
   Site: ['Site', 'SiteExaminer'],
-  Examiner: ['Examiner'],
+  Examiner: ['Examiner', 'ExaminerCertificate'],
 };
 ```
 - `EntityAuditHistoryPage` and `EntityAuditLogDialog` both use `entityTypes` array variable (not single `entityType`)
@@ -325,7 +327,13 @@ function showToastOnce(message, variant, key) {
 - [x] Zod validation on all mutation inputs (both backend and frontend)
 - [x] `requireAdmin` guard on all CRUD and audit mutations
 - [x] GraphQLError with appropriate code for all failures
-- [x] Apollo errorLink clears store before redirecting on auth failure
+- [x] Rate limiting: graphqlRateLimit (500 req/min per IP), loginRateLimit (20 attempts/15min per IP+email)
+- [x] Helmet security headers (CSP disabled in dev, enabled in prod)
+- [x] Request ID middleware (UUID per request, X-Request-Id header)
+- [x] Winston structured logging + Morgan HTTP request logging
+- [x] Apollo introspection disabled in production
+- [x] GraphQL INTERNAL_SERVER_ERROR logged server-side; stack traces never sent to client
+- [x] Apollo errorLink handles RATE_LIMITED (429), network errors (503/502/504), UNAUTHENTICATED, FORBIDDEN
 - [x] JWT_SECRET validated at startup (min 16 chars via Zod envSchema)
 - [ ] JWT_SECRET must be rotated before production deployment
 - [x] No delete of core entity data (studies/sites/examiners/users) — junction unassign only

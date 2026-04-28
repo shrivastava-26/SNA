@@ -1,11 +1,10 @@
 import { GraphQLError } from 'graphql';
-import { queryOne } from '../db/query';
-import { UserRow } from '../types';
 import { verifyPassword } from '../utils/password';
 import { signToken } from '../utils/jwt';
+import { findUserByEmail, findUserById } from '../repositories/authRepository';
 
 export function loginUser(email: string, password: string) {
-  const user = queryOne<UserRow>('SELECT * FROM users WHERE email = ?', [email]);
+  const user = findUserByEmail(email);
 
   if (!user || !verifyPassword(password, user.password)) {
     throw new GraphQLError('Invalid credentials', {
@@ -22,5 +21,5 @@ export function loginUser(email: string, password: string) {
 }
 
 export function getUserById(id: number) {
-  return queryOne<UserRow>('SELECT id, email, role FROM users WHERE id = ?', [id]) ?? null;
+  return findUserById(id);
 }

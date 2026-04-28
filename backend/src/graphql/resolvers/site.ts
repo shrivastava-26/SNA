@@ -61,7 +61,7 @@ export const siteResolvers = {
   },
 
   Site: {
-    studies(parent: SiteRow) { return getStudiesBySite(parent.id); },
-    examiners(parent: SiteRow) { return getExaminersBySite(parent.id); },
+    studies(parent: SiteRow, _: unknown, context: GraphQLContext) { return context.loaders.studiesBySiteId.load(parent.id); },
+    examiners(parent: SiteRow, _: unknown, context: GraphQLContext) { return context.loaders.examinersBySiteId.load(parent.id); },
   },
 };

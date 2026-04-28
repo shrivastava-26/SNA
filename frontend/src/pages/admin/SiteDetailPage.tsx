@@ -18,7 +18,7 @@ import { RelatedDataGrid } from '../../components/RelatedDataGrid';
 import { StatusChip } from '../../components/StatusChip';
 import { DetailPageSkeleton } from '../../components/skeletons';
 import { useSite } from '../../hooks/useSite';
-import { useExaminersPicker } from '../../hooks/useExaminersPicker';
+import { useExaminersPickerLazy } from '../../hooks/useExaminersPicker';
 import { ASSIGN_EXAMINER_TO_SITE, UNASSIGN_EXAMINER_FROM_SITE } from '../../services/adminService';
 import { GET_SITE_QUERY } from '../../services/siteService';
 import { parseGqlError } from '../../utils/gqlErrors';
@@ -50,7 +50,7 @@ export function AdminSiteDetailPage() {
 
   const { site, loading, error } = useSite(id);
   const isClosed = site?.status === 'Closed';
-  const { examiners: allExaminers } = useExaminersPicker(!site || isClosed);
+  const { load: loadExaminers, examiners: allExaminers } = useExaminersPickerLazy();
 
   const refetchOptions = { refetchQueries: [{ query: GET_SITE_QUERY, variables: { id } }] };
   const [assignExaminer, { loading: assigning }] = useMutation(ASSIGN_EXAMINER_TO_SITE, refetchOptions);
@@ -167,6 +167,7 @@ export function AdminSiteDetailPage() {
               <Autocomplete
                 options={unassignedExaminers}
                 value={selectedExaminer}
+                onOpen={() => loadExaminers()}
                 onChange={(_, value) => setSelectedExaminer(value)}
                 getOptionLabel={(o) => `${o.examinerCode} — ${o.name} (${o.role})`}
                 isOptionEqualToValue={(o, v) => o.id === v.id}

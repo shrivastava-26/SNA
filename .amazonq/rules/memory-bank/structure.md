@@ -7,12 +7,14 @@ SNA-y2/
 │   ├── data/app.db              # SQLite database (auto-created)
 │   ├── src/
 │   │   ├── server.ts            # Entry point — Zod env validation, DB init, starts Express
-│   │   ├── app.ts               # Express + Apollo Server wiring, JWT cookie context
+│   │   ├── app.ts               # Express + Apollo Server wiring, JWT cookie context, security middleware, DataLoader per request
 │   │   ├── db/
 │   │   │   ├── connection.ts    # better-sqlite3 singleton (getDb / initConnection)
 │   │   │   ├── migrate.ts       # Schema + indexes + migration shims + seed data (2 users + 2 examiner certificates seeded when examiners exist)
 │   │   │   └── query.ts         # Typed helpers: queryAll<T> / queryOne<T>
 │   │   ├── graphql/
+│   │   │   ├── loaders/
+│   │   │   │   └── index.ts     # DataLoader factory (createLoaders): studyById, siteById, examinerById + relation loaders for N+1 prevention
 │   │   │   ├── schema/
 │   │   │   │   ├── index.ts     # Merges all typeDefs arrays
 │   │   │   │   ├── auth.ts      # User (with role), AuthPayload, Query.me, Mutation.login/logout
@@ -23,34 +25,56 @@ SNA-y2/
 │   │   │   │   └── audit.ts     # AuditLog type, AuditLogPage, Query.getAuditLogs (supports entityType, entityTypes array, entityId)
 │   │   │   └── resolvers/
 │   │   │       ├── index.ts     # Merges all Query/Mutation + type resolvers
-│   │   │       ├── helpers.ts   # requireAuth, requireAdmin, logAudit (supports CREATE/UPDATE/ASSIGN/UNASSIGN)
+│   │   │       ├── helpers.ts   # requireAuth, requireAdmin, logAudit — logAudit now calls insertAuditLog from auditRepository
 │   │   │       ├── auth.ts      # login (with Zod), logout, me resolvers
 │   │   │       ├── study.ts     # getStudies(paged), getStudy, createStudy, updateStudy, assign/unassign site (with audit), assignExaminerToStudySite, unassignExaminerFromStudySite (with audit)
 │   │   │       ├── site.ts      # getSites(paged), getSite, createSite, updateSite, assign/unassign examiner (with audit)
 │   │   │       ├── examiner.ts  # getExaminers(paged), getExaminer, createExaminer, updateExaminer, addExaminerCertificate, updateExaminerCertificate (with audit)
 │   │   │       ├── search.ts    # globalSearch with keyword + SearchFilters
 │   │   │       └── audit.ts     # getAuditLogs (ADMIN only, supports entityTypes array)
+│   │   ├── logger/
+│   │   │   ├── logger.ts        # Winston logger (JSON in prod, colorized in dev); LOG_LEVEL env var
+│   │   │   └── requestLogger.ts # Morgan HTTP request logger piped into Winston
+│   │   ├── middleware/
+│   │   │   ├── requestId.ts     # Attaches UUID requestId to req + X-Request-Id response header
+│   │   │   └── security.ts      # helmet, graphqlRateLimit (500 req/min), loginRateLimit (20/15min per IP+email)
+│   │   ├── repositories/
+│   │   │   ├── auditRepository.ts      # insertAuditLog, queryAuditLogs
+│   │   │   ├── authRepository.ts       # findUserByEmail, findUserById
+│   │   │   ├── certificateRepository.ts # findCertificatesByExaminerId, findCertificateById, countValidCertificates, insert/update certificate
+│   │   │   ├── examinerRepository.ts   # findExaminerById/Paged, insert/update examiner, findExaminersByIds (DataLoader)
+│   │   │   ├── searchRepository.ts     # searchStudies, searchSites, searchExaminers (LIKE queries)
+│   │   │   ├── siteRepository.ts       # findSiteById/Paged, insert/update site, site-examiner junction ops, findSitesByIds (DataLoader)
+│   │   │   └── studyRepository.ts      # findStudyById/Paged, insert/update study, study-site/SSE junction ops, bulk SSE queries, findStudiesByIds (DataLoader)
 │   │   ├── services/
 │   │   │   ├── authService.ts   # loginUser (includes role in JWT), getUserById
 │   │   │   ├── studyService.ts  # getStudiesPaged, CRUD, assignSiteToStudy, unassignSiteFromStudy, getStudySitesWithStudyExaminers, assignExaminerToStudySite, unassignExaminerFromStudySite
-│   │   │   ├── siteService.ts   # getSitesPaged, CRUD (createSite always Planned, SITE_UPDATE_COLUMNS allowlist, P1/P2 rules), assignExaminerToSite, unassignExaminerFromSite
-│   │   │   ├── examinerService.ts # getExaminersPaged, CRUD, getStudiesByExaminer, getSitesByExaminer, getCertificatesByExaminer, getCertificateById, hasValidCertificate, addExaminerCertificate, updateExaminerCertificate
-│   │   │   ├── searchService.ts # globalSearch — keyword LIKE queries across all 3 entities with filters
-│   │   │   └── auditService.ts  # getAuditLogs — supports entityType/entityTypes array, entityId, ordered DESC
+│   │   │   ├── siteService.ts   # getSitesPaged, CRUD (createSite always Planned, P1/P2 rules), assignExaminerToSite, unassignExaminerFromSite
+│   │   │   ├── examinerService.ts # getExaminersPaged, CRUD, getCertificatesByExaminer, getCertificateById, hasValidCertificate, addExaminerCertificate, updateExaminerCertificate
+│   │   │   ├── searchService.ts # globalSearch — delegates to searchRepository
+│   │   │   └── auditService.ts  # getAuditLogs — delegates to auditRepository; supports entityType/entityTypes array, entityId
 │   │   ├── types/
-│   │   │   └── index.ts         # UserRow, StudyRow, SiteRow, ExaminerRow, ExaminerCertificateRow, AuditLogRow, JwtPayload (with role + email), GraphQLContext
+│   │   │   └── index.ts         # UserRow, StudyRow, SiteRow, ExaminerRow, ExaminerCertificateRow, AuditLogRow, JwtPayload (with role + email), GraphQLContext (now includes requestId + loaders)
 │   │   ├── utils/
 │   │   │   ├── jwt.ts           # signToken / verifyToken (JWT_SECRET read lazily via getSecret())
 │   │   │   └── password.ts      # hashPassword / verifyPassword (bcryptjs, cost 10)
-│   │   └── validation/
-│   │       ├── index.ts         # Re-exports all schemas + helpers
-│   │       ├── helpers.ts       # parseOrThrow, zodErrorToFieldErrors, throwBadUserInput
-│   │       ├── envSchema.ts     # Zod env validation (JWT_SECRET min 16 chars, PORT, DB_PATH, NODE_ENV, CORS_ORIGIN)
-│   │       ├── authSchemas.ts   # loginSchema (email + password)
-│   │       ├── studySchemas.ts  # createStudySchema, updateStudySchema (with date-range superRefine)
-│   │       ├── siteSchemas.ts   # createSiteSchema, updateSiteSchema
-│   │       ├── examinerSchemas.ts # createExaminerSchema, updateExaminerSchema, createCertificateSchema, updateCertificateSchema
-│   │       └── assignmentSchemas.ts # assignmentSchema, idSchema, siteExaminerSchema, studySiteExaminerSchema, paginationSchema, pickerPaginationSchema, searchSchema
+│   │   ├── validation/
+│   │   │   ├── index.ts         # Re-exports all schemas + helpers
+│   │   │   ├── helpers.ts       # parseOrThrow, zodErrorToFieldErrors, throwBadUserInput
+│   │   │   ├── envSchema.ts     # Zod env validation (JWT_SECRET min 16 chars, PORT, DB_PATH, NODE_ENV, CORS_ORIGIN)
+│   │   │   ├── authSchemas.ts   # loginSchema (email + password)
+│   │   │   ├── studySchemas.ts  # createStudySchema, updateStudySchema (with date-range superRefine)
+│   │   │   ├── siteSchemas.ts   # createSiteSchema, updateSiteSchema
+│   │   │   ├── examinerSchemas.ts # createExaminerSchema, updateExaminerSchema, createCertificateSchema, updateCertificateSchema
+│   │   │   └── assignmentSchemas.ts # assignmentSchema, idSchema, siteExaminerSchema, studySiteExaminerSchema, paginationSchema, pickerPaginationSchema, searchSchema
+│   │   └── __tests__/
+│   │       ├── integration/
+│   │       │   └── graphql.test.ts  # Integration tests via supertest against full Express app
+│   │       ├── unit/
+│   │       │   ├── studyService.test.ts  # Unit tests: createStudy, updateStudy status transitions, assignSiteToStudy, unassignSiteFromStudy
+│   │       │   ├── siteService.test.ts   # Unit tests: createSite, updateSite, assignExaminerToSite, unassignExaminerFromSite
+│   │       │   └── examinerService.test.ts # Unit tests: examiner CRUD + certificate operations
+│   │       └── testHelpers.ts   # setupTestDb (in-memory SQLite), seedUser helper
 │   ├── .env                     # PORT=4040, JWT_SECRET, DB_PATH
 │   ├── package.json
 │   └── tsconfig.json
@@ -263,7 +287,7 @@ Apollo errorLink:
 - Detail pages use dedicated single-entity queries (`GET_STUDY_QUERY`) — not derived from list cache
 - Picker hooks (`useSitesPicker`, `useExaminersPicker`) fetch all records with `pageSize:1000` for autocomplete
 - Shared `SearchPage` component accepts `layout` + `baseRoute` props — reused by both Admin and Viewer
-- `logAudit` helper in `helpers.ts` called from every admin mutation resolver (CREATE, UPDATE, ASSIGN, UNASSIGN)
+- `logAudit` helper in `helpers.ts` called from every admin mutation resolver (CREATE, UPDATE, ASSIGN, UNASSIGN); delegates to `insertAuditLog` in `auditRepository`
 - Domain rules enforced in services (e.g. site cannot be Active without examiners; auto-downgrade on last unassign)
 - `study_site_examiners` (SSE) 3-way junction + `certificate_id`: tracks which examiners participate in a study at a specific site, linked to the certificate used at assignment time
 - `examiner_certificates` table: each examiner can have multiple certificates; `hasValidCertificate` checked before assigning to site or study; `assignExaminerToSite` and `assignExaminerToStudySite` both enforce valid cert
@@ -272,7 +296,7 @@ Apollo errorLink:
 - Audit entity type `ExaminerCertificate` logged for `addExaminerCertificate` (CREATE) and `updateExaminerCertificate` (UPDATE)
 - `getStudySitesWithStudyExaminers` uses bulk queries + in-memory grouping to avoid N+1 for SSE data
 - `getExaminersByStudy` prefers SSE rows; falls back to `site_examiners` join for legacy/pre-SSE data
-- Apollo errorLink deduplicates FORBIDDEN/INTERNAL_SERVER_ERROR toasts within a 3-second window
+- Apollo errorLink deduplicates FORBIDDEN/INTERNAL_SERVER_ERROR toasts within a 3-second window; also handles RATE_LIMITED (429) and network errors (503/502/504)
 - Admin dashboard fetches all data with `pageSize:1000`; viewer dashboard omits specialty chart
 - `DashboardSkeleton` and `DetailPageSkeleton` (configurable `infoFields` + `relatedSections`) used across all detail/dashboard pages
 - `useUrlPagination` hook persists page+pageSize in URL query params — used by all admin list pages so back button restores exact pagination state
@@ -282,3 +306,8 @@ Apollo errorLink:
 - Study detail page header includes a "History" button navigating to `/admin/studies/:id/history`
 - All CRUD dialogs use 2-step MUI Stepper pattern for better UX
 - Completed studies show a lock banner and disable all assignment operations
+- **DataLoader pattern**: `createLoaders()` called per-request in Apollo context; loaders for entity-by-ID and relation fields prevent N+1 queries on list pages
+- **Repository layer**: all raw SQL moved from services into `repositories/`; services contain only business logic; resolvers call services only
+- **Testing**: Vitest with in-memory SQLite (`setupTestDb`); unit tests for all three service domains; integration tests via supertest
+- **Security hardening**: helmet (CSP disabled in dev), rate limiting (graphqlRateLimit 500/min, loginRateLimit 20/15min per IP+email), requestId middleware, Winston structured logging, introspection disabled in production
+- **`RELATED_ENTITY_TYPES` for Examiner** now includes `ExaminerCertificate` (in addition to `Examiner`) so certificate audit entries appear in examiner history pages

@@ -63,4 +63,7 @@ The project is **fully implemented** — all features described in the README an
 - ✅ Backend: all services, resolvers, schemas, validation, auth, audit logging
 - ✅ Frontend: all admin pages, viewer pages, CRUD dialogs, search, audit history
 - ✅ Domain rules: all study/site lifecycle rules enforced server-side
-- ✅ Security: HttpOnly cookies, bcrypt, Zod validation, role guards, parameterized SQL
+- ✅ Security: HttpOnly cookies, bcrypt, Zod validation, role guards, parameterized SQL, helmet, rate limiting
+- ✅ Architecture: repository layer extracted from services; DataLoader per-request for N+1 prevention
+- ✅ Testing: Vitest unit tests (studyService, siteService, examinerService) + supertest integration tests; in-memory SQLite test DB
+- ✅ Observability: Winston structured logging, Morgan HTTP logging, request ID correlation, introspection disabled in prod
