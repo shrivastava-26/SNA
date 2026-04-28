@@ -42,6 +42,10 @@
 | Forms             | react-hook-form 7.73       |
 | Form validation   | zod 4.3 + @hookform/resolvers 5.2 |
 | Toast/snackbar    | notistack 3.0              |
+| Testing           | vitest 3.2 + @testing-library/react 16.3 |
+| Test matchers     | @testing-library/jest-dom 6.9 |
+| Test events       | @testing-library/user-event 14.6 |
+| Test environment  | jsdom 27.0                 |
 
 ## Development Commands
 
@@ -64,6 +68,9 @@ npm install
 npm run dev      # vite dev server
 npm run build    # tsc + vite build
 npm run preview  # vite preview of build output
+npm test         # vitest run (component + smoke tests)
+npm run test:watch    # vitest watch mode
+npm run test:coverage # vitest with v8 coverage (components + pages)
 ```
 
 ## Ports & Endpoints

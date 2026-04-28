@@ -107,8 +107,6 @@ SNA-y2/
     │   ├── contexts/
     │   │   └── AuthContext.tsx        # Derives isLoggedIn + role from ME_QUERY; exposes useAuth()
     │   ├── hooks/
-    │   │   ├── admin/                 # (empty — reserved for future admin-specific hooks)
-    │   │   ├── shared/                # (empty — reserved for future shared hooks)
     │   │   ├── useLogin.ts            # Login mutation → refetch ME_QUERY → role-based navigate
     │   │   ├── useStudies.ts          # GET_STUDIES_QUERY(page, pageSize) → { studies, total, loading, error }
     │   │   ├── useStudy.ts            # GET_STUDY_QUERY(id) → { study, loading, error }
@@ -168,11 +166,18 @@ SNA-y2/
     │   ├── main.tsx                 # React DOM entry point (wraps with SnackbarProvider)
     │   ├── theme.ts                 # MUI theme (teal palette, borderRadius 8, Poppins font, button overrides)
     │   └── vite-env.d.ts
+    │   ├── __tests__/
+    │   │   ├── AdminRoute.test.tsx    # Unit test: AdminRoute redirects non-admin users
+    │   │   ├── ErrorBoundary.test.tsx # Unit test: ErrorBoundary renders fallback on error
+    │   │   ├── login.smoke.test.tsx   # Smoke test: LoginPage renders and accepts input
+    │   │   ├── ProtectedRoute.test.tsx # Unit test: ProtectedRoute redirects unauthenticated users
+    │   │   └── setup.ts               # Vitest setup: @testing-library/jest-dom matchers
     ├── .env                         # VITE_GRAPHQL_URL=http://localhost:4040/graphql
     ├── index.html
     ├── package.json
     ├── tsconfig.json
-    └── vite.config.ts
+    ├── vite.config.ts
+    └── vitest.config.ts             # Vitest config: jsdom environment, react plugin, coverage on components+pages
 ```
 
 ## Route Structure
@@ -308,6 +313,6 @@ Apollo errorLink:
 - Completed studies show a lock banner and disable all assignment operations
 - **DataLoader pattern**: `createLoaders()` called per-request in Apollo context; loaders for entity-by-ID and relation fields prevent N+1 queries on list pages
 - **Repository layer**: all raw SQL moved from services into `repositories/`; services contain only business logic; resolvers call services only
-- **Testing**: Vitest with in-memory SQLite (`setupTestDb`); unit tests for all three service domains; integration tests via supertest
+- **Testing**: Vitest with in-memory SQLite (`setupTestDb`); unit tests for all three service domains; integration tests via supertest; frontend Vitest with jsdom + @testing-library/react for component/smoke tests (AdminRoute, ProtectedRoute, ErrorBoundary, login smoke)
 - **Security hardening**: helmet (CSP disabled in dev), rate limiting (graphqlRateLimit 500/min, loginRateLimit 20/15min per IP+email), requestId middleware, Winston structured logging, introspection disabled in production
 - **`RELATED_ENTITY_TYPES` for Examiner** now includes `ExaminerCertificate` (in addition to `Examiner`) so certificate audit entries appear in examiner history pages

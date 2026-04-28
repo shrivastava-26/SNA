@@ -65,5 +65,5 @@ The project is **fully implemented** — all features described in the README an
 - ✅ Domain rules: all study/site lifecycle rules enforced server-side
 - ✅ Security: HttpOnly cookies, bcrypt, Zod validation, role guards, parameterized SQL, helmet, rate limiting
 - ✅ Architecture: repository layer extracted from services; DataLoader per-request for N+1 prevention
-- ✅ Testing: Vitest unit tests (studyService, siteService, examinerService) + supertest integration tests; in-memory SQLite test DB
+- ✅ Testing: Vitest unit tests (studyService, siteService, examinerService) + supertest integration tests; in-memory SQLite test DB; frontend Vitest + @testing-library/react component/smoke tests (AdminRoute, ProtectedRoute, ErrorBoundary, login)
 - ✅ Observability: Winston structured logging, Morgan HTTP logging, request ID correlation, introspection disabled in prod
