@@ -38,6 +38,13 @@ export interface ExaminerRow {
   status: string;
 }
 
+export interface ExaminerCertificateRow {
+  id: number;
+  examiner_id: number;
+  certificateId: string;
+  expiresOn: string;
+}
+
 export interface AuditLogRow {
   id: number;
   actorUserId: number;

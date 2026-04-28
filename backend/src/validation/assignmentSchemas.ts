@@ -16,6 +16,7 @@ export const studySiteExaminerSchema = z.object({
   studyId: idSchema,
   siteId: idSchema,
   examinerId: idSchema,
+  certificateId: idSchema.optional(),
 });
 
 // Pagination for list pages: page ≥ 1, pageSize 1–100

@@ -10,7 +10,7 @@ SNA-y2/
 │   │   ├── app.ts               # Express + Apollo Server wiring, JWT cookie context
 │   │   ├── db/
 │   │   │   ├── connection.ts    # better-sqlite3 singleton (getDb / initConnection)
-│   │   │   ├── migrate.ts       # Schema + indexes + migration shims + seed data
+│   │   │   ├── migrate.ts       # Schema + indexes + migration shims + seed data (2 users only)
 │   │   │   └── query.ts         # Typed helpers: queryAll<T> / queryOne<T>
 │   │   ├── graphql/
 │   │   │   ├── schema/
@@ -20,37 +20,37 @@ SNA-y2/
 │   │   │   │   ├── site.ts      # Site, SitePage, CreateSiteInput, UpdateSiteInput, CRUD + assignment mutations
 │   │   │   │   ├── examiner.ts  # Examiner (with role), ExaminerPage, CRUD mutations
 │   │   │   │   ├── search.ts    # SearchResults, SearchFilters input, Query.globalSearch
-│   │   │   │   └── audit.ts     # AuditLog type, Query.getAuditLogs
+│   │   │   │   └── audit.ts     # AuditLog type, AuditLogPage, Query.getAuditLogs (supports entityType, entityTypes array, entityId)
 │   │   │   └── resolvers/
 │   │   │       ├── index.ts     # Merges all Query/Mutation + type resolvers
-│   │   │       ├── helpers.ts   # requireAuth, requireAdmin, logAudit
+│   │   │       ├── helpers.ts   # requireAuth, requireAdmin, logAudit (supports CREATE/UPDATE/ASSIGN/UNASSIGN)
 │   │   │       ├── auth.ts      # login (with Zod), logout, me resolvers
-│   │   │       ├── study.ts     # getStudies(paged), getStudy, createStudy, updateStudy, assign/unassign site, assignExaminerToStudySite, unassignExaminerFromStudySite
-│   │   │       ├── site.ts      # getSites(paged), getSite, createSite, updateSite, assign/unassign examiner
+│   │   │       ├── study.ts     # getStudies(paged), getStudy, createStudy, updateStudy, assign/unassign site (with audit), assignExaminerToStudySite, unassignExaminerFromStudySite (with audit)
+│   │   │       ├── site.ts      # getSites(paged), getSite, createSite, updateSite, assign/unassign examiner (with audit)
 │   │   │       ├── examiner.ts  # getExaminers(paged), getExaminer, createExaminer, updateExaminer
 │   │   │       ├── search.ts    # globalSearch with keyword + SearchFilters
-│   │   │       └── audit.ts     # getAuditLogs (ADMIN only)
+│   │   │       └── audit.ts     # getAuditLogs (ADMIN only, supports entityTypes array)
 │   │   ├── services/
 │   │   │   ├── authService.ts   # loginUser (includes role in JWT), getUserById
 │   │   │   ├── studyService.ts  # getStudiesPaged, CRUD, assignSiteToStudy, unassignSiteFromStudy, getStudySitesWithStudyExaminers, assignExaminerToStudySite, unassignExaminerFromStudySite
 │   │   │   ├── siteService.ts   # getSitesPaged, CRUD (createSite always Planned, SITE_UPDATE_COLUMNS allowlist, P1/P2 rules), assignExaminerToSite, unassignExaminerFromSite
 │   │   │   ├── examinerService.ts # getExaminersPaged, CRUD, getStudiesByExaminer, getSitesByExaminer
 │   │   │   ├── searchService.ts # globalSearch — keyword LIKE queries across all 3 entities with filters
-│   │   │   └── auditService.ts  # getAuditLogs — filtered by entityType, ordered DESC
+│   │   │   └── auditService.ts  # getAuditLogs — supports entityType/entityTypes array, entityId, ordered DESC
 │   │   ├── types/
-│   │   │   └── index.ts         # UserRow, StudyRow, SiteRow, ExaminerRow, AuditLogRow, JwtPayload (with role), GraphQLContext
+│   │   │   └── index.ts         # UserRow, StudyRow, SiteRow, ExaminerRow, AuditLogRow, JwtPayload (with role + email), GraphQLContext
 │   │   ├── utils/
-│   │   │   ├── jwt.ts           # signToken / verifyToken (JWT_SECRET read lazily)
+│   │   │   ├── jwt.ts           # signToken / verifyToken (JWT_SECRET read lazily via getSecret())
 │   │   │   └── password.ts      # hashPassword / verifyPassword (bcryptjs, cost 10)
 │   │   └── validation/
 │   │       ├── index.ts         # Re-exports all schemas + helpers
 │   │       ├── helpers.ts       # parseOrThrow, zodErrorToFieldErrors, throwBadUserInput
-│   │       ├── envSchema.ts     # Zod env validation (JWT_SECRET min 16 chars, PORT, DB_PATH, NODE_ENV)
+│   │       ├── envSchema.ts     # Zod env validation (JWT_SECRET min 16 chars, PORT, DB_PATH, NODE_ENV, CORS_ORIGIN)
 │   │       ├── authSchemas.ts   # loginSchema (email + password)
 │   │       ├── studySchemas.ts  # createStudySchema, updateStudySchema (with date-range superRefine)
 │   │       ├── siteSchemas.ts   # createSiteSchema, updateSiteSchema
 │   │       ├── examinerSchemas.ts # createExaminerSchema, updateExaminerSchema
-│   │       └── assignmentSchemas.ts # assignmentSchema, idSchema, siteExaminerSchema, studySiteExaminerSchema, searchSchema
+│   │       └── assignmentSchemas.ts # assignmentSchema, idSchema, siteExaminerSchema, studySiteExaminerSchema, paginationSchema, pickerPaginationSchema, searchSchema
 │   ├── .env                     # PORT=4040, JWT_SECRET, DB_PATH
 │   ├── package.json
 │   └── tsconfig.json
@@ -69,11 +69,11 @@ SNA-y2/
     │   │   │   ├── DetailPageSkeleton.tsx # Loading skeleton for detail pages (configurable infoFields + relatedSections)
     │   │   │   └── index.ts               # Re-exports DashboardSkeleton, DetailPageSkeleton
     │   │   ├── AdminRoute.tsx         # Auth guard: must be logged in AND role === 'ADMIN'
-    │   │   ├── AppFooter.tsx
+    │   │   ├── AppFooter.tsx          # Copyright footer
     │   │   ├── AppHeader.tsx          # Fixed AppBar with user avatar + logout
-    │   │   ├── DetailPageHeader.tsx   # Back button + title + badge + StatusChip
+    │   │   ├── DetailPageHeader.tsx   # Back button + title + badge + StatusChip (always uses navigate(-1))
     │   │   ├── EmptyState.tsx         # Dashed-border empty placeholder
-    │   │   ├── EntityAuditLogDialog.tsx  # Modal dialog showing paginated change history for a specific entity (before→after diff)
+    │   │   ├── EntityAuditLogDialog.tsx  # Modal dialog showing paginated change history for a specific entity (before→after diff, uses entityTypes array)
     │   │   ├── Layout.tsx             # Legacy layout (kept for compatibility)
     │   │   ├── ProtectedRoute.tsx     # Auth guard: must be logged in (any role)
     │   │   ├── RelatedDataGrid.tsx    # Title + count chip + DataGrid or EmptyState
@@ -97,19 +97,19 @@ SNA-y2/
     │   │   └── useUrlPagination.ts    # Persists page+pageSize in URL (?page=N&pageSize=N); used by all admin list pages
     │   ├── pages/
     │   │   ├── admin/
-    │   │   │   ├── DashboardPage.tsx      # AdminDashboardPage — charts + stats, uses DashboardSkeleton
-    │   │   │   ├── StudiesPage.tsx        # AdminStudiesPage — server-paginated DataGrid + CreateStudyDialog + EditStudyDialog
-    │   │   │   ├── StudyDetailPage.tsx    # AdminStudyDetailPage — study info + site assign/unassign + per-site examiner checkboxes (StudySitePanel)
+    │   │   │   ├── DashboardPage.tsx      # AdminDashboardPage — charts + stats (including specialty chart), uses DashboardSkeleton
+    │   │   │   ├── StudiesPage.tsx        # AdminStudiesPage — server-paginated DataGrid + CreateStudyDialog (2-step) + EditStudyDialog (2-step)
+    │   │   │   ├── StudyDetailPage.tsx    # AdminStudyDetailPage — study info + site assign/unassign + per-site examiner checkboxes (StudySitePanel) + History button
     │   │   │   ├── StudyAuditHistoryPage.tsx  # Thin wrapper → EntityAuditHistoryPage for Study entity
-    │   │   │   ├── SitesPage.tsx          # AdminSitesPage — server-paginated DataGrid + CreateSiteDialog + EditSiteDialog
-    │   │   │   ├── SiteDetailPage.tsx     # AdminSiteDetailPage — site info + examiner assign/unassign autocomplete
+    │   │   │   ├── SitesPage.tsx          # AdminSitesPage — server-paginated DataGrid + CreateSiteDialog (2-step) + EditSiteDialog (2-step)
+    │   │   │   ├── SiteDetailPage.tsx     # AdminSiteDetailPage — site info + examiner assign/unassign autocomplete + History button
     │   │   │   ├── SiteAuditHistoryPage.tsx   # Thin wrapper → EntityAuditHistoryPage for Site entity
-    │   │   │   ├── ExaminersPage.tsx      # AdminExaminersPage — server-paginated DataGrid + CreateExaminerDialog + EditExaminerDialog
-    │   │   │   ├── ExaminerDetailPage.tsx # AdminExaminerDetailPage — examiner info + linked studies + sites (read-only)
+    │   │   │   ├── ExaminersPage.tsx      # AdminExaminersPage — server-paginated DataGrid + CreateExaminerDialog (2-step) + EditExaminerDialog (2-step)
+    │   │   │   ├── ExaminerDetailPage.tsx # AdminExaminerDetailPage — examiner info + linked studies + sites (read-only) + History button
     │   │   │   ├── ExaminerAuditHistoryPage.tsx # Thin wrapper → EntityAuditHistoryPage for Examiner entity
-    │   │   │   ├── EntityAuditHistoryPage.tsx   # Shared full-page audit history: MUI Table + TablePagination + accordion expand + URL-persisted pagination
+    │   │   │   ├── EntityAuditHistoryPage.tsx   # Shared full-page audit history: MUI Table + TablePagination + accordion expand + URL-persisted pagination + entityTypes array
     │   │   │   ├── SearchPage.tsx         # AdminSearchPage — thin wrapper → shared SearchPage with AdminLayout
-    │   │   │   └── AuditLogsPage.tsx      # AuditLogsPage — MUI Table + TablePagination, entity type filter, accordion expand (ADMIN only, fetchPolicy: network-only)
+    │   │   │   └── AuditLogsPage.tsx      # AuditLogsPage — MUI Table + TablePagination, entity type filter (includes junction types), accordion expand (ADMIN only, fetchPolicy: network-only)
     │   │   ├── viewer/
     │   │   │   ├── DashboardPage.tsx      # ViewerDashboardPage — read-only charts + stats (no specialty chart), uses DashboardSkeleton
     │   │   │   ├── StudiesPage.tsx        # ViewerStudiesPage — server-paginated read-only DataGrid
@@ -120,30 +120,32 @@ SNA-y2/
     │   │   │   ├── ExaminerDetailPage.tsx # ViewerExaminerDetailPage — examiner info + linked studies + sites (read-only)
     │   │   │   └── SearchPage.tsx         # ViewerSearchPage — thin wrapper → shared SearchPage with ViewerLayout
     │   │   ├── shared/
-    │   │   │   └── SearchPage.tsx         # SearchPage — debounced keyword, entity toggle, context filters, useLazyQuery
+    │   │   │   └── SearchPage.tsx         # SearchPage — debounced keyword, entity toggle, context filters, useLazyQuery, filter-only search support
     │   │   └── (legacy flat pages kept for compatibility: DashboardPage, StudyPage, SitePage, ExaminerPage, StudyDetailPage, SiteDetailPage, ExaminerDetailPage, LoginPage)
     │   ├── services/
     │   │   ├── authService.ts       # ME_QUERY (includes role), LOGIN_MUTATION, LOGOUT_MUTATION
     │   │   ├── studyService.ts      # GET_STUDIES_QUERY (paginated), GET_STUDY_QUERY (with studySites/examiners/sites), GET_SITES_PICKER_QUERY
     │   │   ├── siteService.ts       # GET_SITES_QUERY (paginated), GET_SITE_QUERY (with relations), GET_EXAMINERS_PICKER_QUERY
     │   │   ├── examinerService.ts   # GET_EXAMINERS_QUERY (paginated), GET_EXAMINER_QUERY (with studies + sites)
-    │   │   └── adminService.ts      # All mutations (CREATE/UPDATE/ASSIGN/UNASSIGN for studies, sites, examiners, SSE), GLOBAL_SEARCH_QUERY, GET_AUDIT_LOGS_QUERY
-    │   ├── types/index.ts           # Study (with studySites?), StudySite, Site, Examiner, AuditLog, AuthContextValue (with role)
+    │   │   ├── searchService.ts     # GLOBAL_SEARCH_QUERY (keyword + filters → studies/sites/examiners)
+    │   │   └── adminService.ts      # All mutations (CREATE/UPDATE/ASSIGN/UNASSIGN for studies, sites, examiners, SSE), GET_AUDIT_LOGS_QUERY (supports entityTypes array)
+    │   ├── types/index.ts           # Study (with studySites?), StudySite, Site, Examiner, AuditLog, AuditLogPage, AuthContextValue (with role)
     │   ├── utils/
     │   │   ├── apolloClient.ts      # ApolloClient with errorLink (UNAUTHENTICATED → /login, FORBIDDEN toast, INTERNAL_SERVER_ERROR toast) + httpLink
-    │   │   ├── auditDiff.ts         # FIELD_LABELS, fieldLabel(), parseJson(), diffObjects(), summaryText() — shared by AuditLogsPage + EntityAuditHistoryPage
+    │   │   ├── auditDiff.ts         # FIELD_LABELS, fieldLabel(), parseJson(), diffObjects(), summaryText() — shared by AuditLogsPage + EntityAuditHistoryPage + EntityAuditLogDialog
     │   │   └── gqlErrors.ts         # parseGqlError — extracts code, message, fieldErrors from ApolloError
     │   ├── validation/
     │   │   ├── index.ts             # Re-exports all frontend schemas
     │   │   ├── authSchemas.ts       # loginSchema, LoginFormValues
-    │   │   ├── studySchemas.ts      # createStudySchema, updateStudySchema (date-range refine), nextAllowedStatus()
-    │   │   ├── siteSchemas.ts       # createSiteSchema, updateSiteSchema
+    │   │   ├── studySchemas.ts      # createStudySchema, updateStudySchema (date-range refine), nextAllowedStatus(), todayLocal()
+    │   │   ├── siteSchemas.ts       # createSiteSchema, updateSiteSchema, nextAllowedSiteStatus()
     │   │   └── examinerSchemas.ts   # createExaminerSchema, updateExaminerSchema
     │   ├── App.tsx                  # Router: /admin/* (AdminRoute) + /viewer/* (ProtectedRoute) + legacy redirects
     │   ├── main.tsx                 # React DOM entry point (wraps with SnackbarProvider)
-    │   ├── theme.ts                 # MUI theme (teal palette, borderRadius 8, button overrides)
+    │   ├── theme.ts                 # MUI theme (teal palette, borderRadius 8, Poppins font, button overrides)
     │   └── vite-env.d.ts
     ├── .env                         # VITE_GRAPHQL_URL=http://localhost:4040/graphql
+    ├── index.html
     ├── package.json
     ├── tsconfig.json
     └── vite.config.ts
@@ -155,7 +157,7 @@ SNA-y2/
 
 /admin/dashboard                → AdminRoute → AdminDashboardPage
 /admin/studies                  → AdminRoute → AdminStudiesPage (CRUD)
-/admin/studies/:id              → AdminRoute → AdminStudyDetailPage (assign sites)
+/admin/studies/:id              → AdminRoute → AdminStudyDetailPage (assign sites, SSE checkboxes)
 /admin/studies/:id/history      → AdminRoute → StudyAuditHistoryPage
 /admin/sites                    → AdminRoute → AdminSitesPage (CRUD)
 /admin/sites/:id                → AdminRoute → AdminSiteDetailPage (assign examiners)
@@ -190,8 +192,8 @@ examiners       id, examinerCode UNIQUE, name, specialty, email,
                 role CHECK('Principal Investigator','Sub-Investigator'), status
 study_sites     study_id FK, site_id FK  (M:M)
 site_examiners  site_id FK, examiner_id FK  (M:M)
-study_site_examiners  study_id FK, site_id FK, examiner_id FK  (3-way junction, PK on all three)
-audit_logs      id, actorUserId, actorEmail, action CHECK('CREATE','UPDATE'),
+study_site_examiners  study_id FK, site_id FK, examiner_id FK  (3-way junction, PK on all three, ON DELETE RESTRICT)
+audit_logs      id, actorUserId, actorEmail, action CHECK('CREATE','UPDATE','ASSIGN','UNASSIGN'),
                 entityType, entityId, beforeJson, afterJson, createdAt DEFAULT datetime('now')
 
 Indexes: studies(title,sponsor,status,phase), sites(name,city,country,status),
@@ -202,12 +204,12 @@ Indexes: studies(title,sponsor,status,phase), sites(name,city,country,status),
 ## Data Flow
 ```
 Login → useLogin → GQL mutation login
-  → backend sets HttpOnly cookie (auth_token) with role in JWT
+  → backend sets HttpOnly cookie (auth_token) with role+email in JWT
   → client.refetchQueries([ME_QUERY]) → AuthContext.isLoggedIn=true, role='ADMIN'|'VIEWER'
   → navigate to /admin/dashboard or /viewer/dashboard based on role
 
 Admin CRUD (e.g. createStudy):
-  → AdminStudiesPage form → react-hook-form + Zod validation (frontend)
+  → AdminStudiesPage form (2-step Stepper) → react-hook-form + Zod validation (frontend)
   → CREATE_STUDY_MUTATION → backend resolver
   → requireAdmin(context) → parseOrThrow(createStudySchema, input) (backend Zod)
   → createStudy service → INSERT + return new row
@@ -218,20 +220,23 @@ Assignment (e.g. assignSiteToStudy):
   → AdminStudyDetailPage Autocomplete → ASSIGN_SITE_TO_STUDY mutation
   → requireAdmin → parseOrThrow(assignmentSchema) → assignSiteToStudy service
   → INSERT OR IGNORE into study_sites
+  → logAudit(context, 'ASSIGN', 'StudySite', studyId, null, {studyId, siteId})
   → refetchQueries([GET_STUDY_QUERY]) → RelatedDataGrid updates
 
 SSE Assignment (assignExaminerToStudySite):
   → AdminStudyDetailPage StudySitePanel checkbox toggle
   → ASSIGN_EXAMINER_TO_STUDY_SITE mutation
   → requireAdmin → parseOrThrow(studySiteExaminerSchema)
-  → validates (study,site) in study_sites AND (site,examiner) in site_examiners
+  → validates (study,site) in study_sites AND (site,examiner) in site_examiners AND site not Closed
   → INSERT OR IGNORE into study_site_examiners
+  → logAudit(context, 'ASSIGN', 'StudySiteExaminer', studyId, null, {studyId, siteId, examinerId})
   → refetchQueries([GET_STUDY_QUERY]) → StudySitePanel re-renders
 
 Search:
   → SearchPage keyword input → debounced 400ms → useLazyQuery(GLOBAL_SEARCH_QUERY)
   → globalSearch service → LIKE queries on studies/sites/examiners with optional filters
   → Results grouped by entity type, clickable → navigate to detail page
+  → Filter-only search (no keyword) sends '%%' to satisfy backend min(2) validation
 
 Apollo errorLink:
   → UNAUTHENTICATED → client.clearStore() → window.location.href = '/login'
@@ -244,14 +249,14 @@ Apollo errorLink:
 - Monorepo: two independent npm packages (`backend/`, `frontend/`)
 - GraphQL as sole API layer — no REST endpoints except `/health`
 - Role-based access: `requireAuth` for any logged-in user, `requireAdmin` for ADMIN-only operations
-- Auth via HttpOnly cookie (`auth_token`) with `role` in JWT payload — never localStorage
+- Auth via HttpOnly cookie (`auth_token`) with `role` + `email` in JWT payload — never localStorage
 - SQLite via `better-sqlite3` (synchronous) — no ORM, raw SQL with typed helpers
 - Zod validation on both sides: backend `parseOrThrow` in resolvers, frontend `zodResolver` in react-hook-form
 - Server-side pagination: all list queries return `{ rows, total }` page objects
 - Detail pages use dedicated single-entity queries (`GET_STUDY_QUERY`) — not derived from list cache
 - Picker hooks (`useSitesPicker`, `useExaminersPicker`) fetch all records with `pageSize:1000` for autocomplete
 - Shared `SearchPage` component accepts `layout` + `baseRoute` props — reused by both Admin and Viewer
-- `logAudit` helper in `helpers.ts` called from every admin CREATE/UPDATE mutation resolver
+- `logAudit` helper in `helpers.ts` called from every admin mutation resolver (CREATE, UPDATE, ASSIGN, UNASSIGN)
 - Domain rules enforced in services (e.g. site cannot be Active without examiners; auto-downgrade on last unassign)
 - `study_site_examiners` (SSE) 3-way junction: tracks which examiners participate in a study at a specific site
 - `getStudySitesWithStudyExaminers` uses bulk queries + in-memory grouping to avoid N+1 for SSE data
@@ -264,3 +269,5 @@ Apollo errorLink:
 - `utils/auditDiff.ts` centralises `FIELD_LABELS`, `diffObjects`, `summaryText` — shared by `AuditLogsPage`, `EntityAuditHistoryPage`, and `EntityAuditLogDialog`
 - Edit dialogs disable Save button when `!isDirty` (react-hook-form `formState.isDirty`)
 - Study detail page header includes a "History" button navigating to `/admin/studies/:id/history`
+- All CRUD dialogs use 2-step MUI Stepper pattern for better UX
+- Completed studies show a lock banner and disable all assignment operations

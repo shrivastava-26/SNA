@@ -2,10 +2,13 @@ import { GraphQLContext, ExaminerRow } from '../../types';
 import {
   getExaminersPaged, getExaminerById, getStudiesByExaminer, getSitesByExaminer,
   createExaminer, updateExaminer, CreateExaminerInput, UpdateExaminerInput,
+  getCertificatesByExaminer, addExaminerCertificate, updateExaminerCertificate,
+  CreateCertificateInput, UpdateCertificateInput, getCertificateById,
 } from '../../services/examinerService';
 import { requireAuth, requireAdmin, logAudit } from './helpers';
 import {
   parseOrThrow, createExaminerSchema, updateExaminerSchema, idSchema, pickerPaginationSchema,
+  createCertificateSchema, updateCertificateSchema,
 } from '../../validation';
 
 export const examinerResolvers = {
@@ -40,10 +43,30 @@ export const examinerResolvers = {
       logAudit(context, 'UPDATE', 'Examiner', examiner.id, JSON.stringify(before), JSON.stringify(examiner));
       return examiner;
     },
+
+    addExaminerCertificate(_: unknown, { examinerId, input }: { examinerId: string; input: CreateCertificateInput }, context: GraphQLContext) {
+      requireAdmin(context);
+      parseOrThrow(idSchema, examinerId);
+      const validated = parseOrThrow(createCertificateSchema, input);
+      const cert = addExaminerCertificate(Number(examinerId), validated as CreateCertificateInput);
+      logAudit(context, 'CREATE', 'ExaminerCertificate', Number(examinerId), null, JSON.stringify(cert));
+      return cert;
+    },
+
+    updateExaminerCertificate(_: unknown, { id, input }: { id: string; input: UpdateCertificateInput }, context: GraphQLContext) {
+      requireAdmin(context);
+      parseOrThrow(idSchema, id);
+      const validated = parseOrThrow(updateCertificateSchema, input);
+      const before = getCertificateById(Number(id));
+      const cert = updateExaminerCertificate(Number(id), validated as UpdateCertificateInput);
+      logAudit(context, 'UPDATE', 'ExaminerCertificate', before!.examiner_id, JSON.stringify(before), JSON.stringify(cert));
+      return cert;
+    },
   },
 
   Examiner: {
     studies(parent: ExaminerRow) { return getStudiesByExaminer(parent.id); },
     sites(parent: ExaminerRow) { return getSitesByExaminer(parent.id); },
+    certificates(parent: ExaminerRow) { return getCertificatesByExaminer(parent.id); },
   },
 };

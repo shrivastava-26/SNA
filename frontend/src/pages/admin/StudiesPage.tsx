@@ -279,7 +279,7 @@ function EditStudyDialog({ study, onClose }: { study: Study; onClose: () => void
               {...register('status')} error={!!errors.status}
               helperText={errors.status?.message ?? statusHelperText(study.status, watchedStatus ?? study.status)}
               disabled={study.status === 'Completed'}>
-              {statusOptions.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+              {statusOptions.map((s) => <MenuItem key={s} value={s} disabled={s === study.status}>{s}</MenuItem>)}
             </TextField>
           </Box>
         )}

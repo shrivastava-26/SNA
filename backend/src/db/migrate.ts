@@ -57,9 +57,10 @@ export function initDb(): void {
     );
 
     CREATE TABLE IF NOT EXISTS study_site_examiners (
-      study_id    INTEGER NOT NULL REFERENCES studies(id) ON DELETE RESTRICT,
-      site_id     INTEGER NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
-      examiner_id INTEGER NOT NULL REFERENCES examiners(id) ON DELETE RESTRICT,
+      study_id       INTEGER NOT NULL REFERENCES studies(id) ON DELETE RESTRICT,
+      site_id        INTEGER NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
+      examiner_id    INTEGER NOT NULL REFERENCES examiners(id) ON DELETE RESTRICT,
+      certificate_id INTEGER NOT NULL REFERENCES examiner_certificates(id) ON DELETE RESTRICT,
       PRIMARY KEY (study_id, site_id, examiner_id)
     );
 
@@ -67,7 +68,7 @@ export function initDb(): void {
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       actorUserId INTEGER NOT NULL,
       actorEmail  TEXT NOT NULL,
-      action      TEXT NOT NULL CHECK(action IN ('CREATE','UPDATE')),
+      action      TEXT NOT NULL CHECK(action IN ('CREATE','UPDATE','ASSIGN','UNASSIGN')),
       entityType  TEXT NOT NULL,
       entityId    INTEGER NOT NULL,
       beforeJson  TEXT,
@@ -90,6 +91,17 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_audit_entity     ON audit_logs(entityType, entityId);
     CREATE INDEX IF NOT EXISTS idx_sse_study_site   ON study_site_examiners(study_id, site_id);
     CREATE INDEX IF NOT EXISTS idx_sse_examiner     ON study_site_examiners(examiner_id);
+
+    CREATE TABLE IF NOT EXISTS examiner_certificates (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      examiner_id INTEGER NOT NULL REFERENCES examiners(id) ON DELETE RESTRICT,
+      certificateId TEXT NOT NULL,
+      expiresOn   TEXT NOT NULL,
+      UNIQUE(examiner_id, certificateId)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cert_examiner   ON examiner_certificates(examiner_id);
+    CREATE INDEX IF NOT EXISTS idx_cert_expires    ON examiner_certificates(expiresOn);
   `);
 
   // Migrate existing tables — add columns that may be missing from older DB files.
@@ -97,7 +109,65 @@ export function initDb(): void {
   try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'VIEWER'`); } catch { /* already exists */ }
   try { db.exec(`ALTER TABLE examiners ADD COLUMN role TEXT NOT NULL DEFAULT 'Sub-Investigator'`); } catch { /* already exists */ }
 
+  // Migration shim: add certificate_id to study_site_examiners if missing
+  try { db.exec(`ALTER TABLE study_site_examiners ADD COLUMN certificate_id INTEGER NOT NULL DEFAULT 0 REFERENCES examiner_certificates(id) ON DELETE RESTRICT`); } catch { /* already exists */ }
+
+  // Widen audit_logs action CHECK to include ASSIGN/UNASSIGN.
+  // SQLite cannot ALTER CHECK constraints, so we recreate the table if the old constraint is in place.
+  try {
+    db.prepare(`INSERT INTO audit_logs (actorUserId, actorEmail, action, entityType, entityId) VALUES (0, '__migration_test__', 'ASSIGN', '__test__', 0)`).run();
+    db.prepare(`DELETE FROM audit_logs WHERE actorEmail = '__migration_test__'`).run();
+  } catch {
+    // Old CHECK constraint rejects ASSIGN — recreate table
+    db.exec(`
+      ALTER TABLE audit_logs RENAME TO audit_logs_old;
+      CREATE TABLE audit_logs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        actorUserId INTEGER NOT NULL,
+        actorEmail  TEXT NOT NULL,
+        action      TEXT NOT NULL CHECK(action IN ('CREATE','UPDATE','ASSIGN','UNASSIGN')),
+        entityType  TEXT NOT NULL,
+        entityId    INTEGER NOT NULL,
+        beforeJson  TEXT,
+        afterJson   TEXT,
+        createdAt   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO audit_logs SELECT * FROM audit_logs_old;
+      DROP TABLE audit_logs_old;
+      CREATE INDEX IF NOT EXISTS idx_audit_actor  ON audit_logs(actorUserId);
+      CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entityType, entityId);
+    `);
+  }
+
   seedUsers(db);
+  seedCertificates(db);
+}
+
+function seedCertificates(db: ReturnType<typeof getDb>) {
+  // Only seed if examiners exist and no certificates yet
+  const hasExaminers = queryOne<{ cnt: number }>('SELECT COUNT(*) as cnt FROM examiners');
+  if (!hasExaminers || hasExaminers.cnt === 0) return;
+  const hasCerts = queryOne<{ cnt: number }>('SELECT COUNT(*) as cnt FROM examiner_certificates');
+  if (hasCerts && hasCerts.cnt > 0) return;
+
+  // Examiner 1: valid cert (expires next year)
+  const ex1 = queryOne<{ id: number }>('SELECT id FROM examiners ORDER BY id ASC LIMIT 1');
+  // Examiner 2: expired cert (expired last year)
+  const ex2 = queryOne<{ id: number }>('SELECT id FROM examiners ORDER BY id ASC LIMIT 1 OFFSET 1');
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  const lastYear = new Date();
+  lastYear.setFullYear(lastYear.getFullYear() - 1);
+  const fmtDate = (d: Date): string => d.toISOString().slice(0, 10);
+
+  if (ex1) {
+    db.prepare('INSERT OR IGNORE INTO examiner_certificates (examiner_id, certificateId, expiresOn) VALUES (?, ?, ?)')
+      .run(ex1.id, 'GCP-CERT-001', fmtDate(nextYear));
+  }
+  if (ex2) {
+    db.prepare('INSERT OR IGNORE INTO examiner_certificates (examiner_id, certificateId, expiresOn) VALUES (?, ?, ?)')
+      .run(ex2.id, 'GCP-CERT-002', fmtDate(lastYear));
+  }
 }
 
 function seedUsers(db: ReturnType<typeof getDb>) {

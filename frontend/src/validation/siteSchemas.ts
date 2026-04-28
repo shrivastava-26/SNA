@@ -19,3 +19,9 @@ export const updateSiteSchema = z.object({
 
 export type CreateSiteFormValues = z.infer<typeof createSiteSchema>;
 export type UpdateSiteFormValues = z.infer<typeof updateSiteSchema>;
+
+export function nextAllowedSiteStatus(current: string): 'Active' | 'Closed' | null {
+  if (current === 'Planned') return 'Active';
+  if (current === 'Active') return 'Closed';
+  return null;
+}

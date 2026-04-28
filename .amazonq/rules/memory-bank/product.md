@@ -6,24 +6,26 @@ SNA Demo is a full-stack clinical study management application demonstrating a m
 ## Key Features
 - JWT-based authentication via HttpOnly cookies with role claim (`ADMIN` / `VIEWER`)
 - Role-based routing: ADMIN gets full CRUD + audit logs; VIEWER gets read-only access
-- Dashboard with Chart.js visualizations: study status doughnut, phase bar chart, examiner specialty breakdown, sites-by-country list
+- Dashboard with Chart.js visualizations: study status doughnut, phase bar chart, examiner specialty breakdown (admin only), sites-by-country list
 - Studies, Sites, and Examiners list pages — server-side paginated MUI DataGrid tables
 - Detail pages for each entity showing related data in nested DataGrids
-- Admin CRUD: create/edit studies, sites, examiners via react-hook-form + Zod validated dialogs
+- Admin CRUD: create/edit studies, sites, examiners via react-hook-form + Zod validated 2-step Stepper dialogs
 - Admin assignment management: assign/unassign sites to studies, assign/unassign examiners to sites, assign/unassign examiners to specific study+site pairs (3-way SSE junction)
-- Study detail page: per-site examiner assignment via checkbox panel (StudySitePanel) — shows available vs assigned examiners per site
+- Study detail page: per-site examiner assignment via checkbox panel (StudySitePanel) — shows available vs assigned examiners per site; Completed studies show lock banner
 - Viewer study detail page: read-only per-site examiner breakdown (ViewerStudySitePanel) — only shows sites with assigned examiners
-- Audit log page — all admin CREATE/UPDATE actions recorded with before/after JSON snapshots; filterable by entity type; expandable inline diff rows (accordion, one at a time)
-- Per-entity audit history pages — dedicated full-page paginated change history for each Study, Site, and Examiner
+- Comprehensive audit logging — all admin actions (CREATE, UPDATE, ASSIGN, UNASSIGN) recorded with before/after JSON snapshots
+- Global audit log page — filterable by entity type (including junction types: StudySite, SiteExaminer, StudySiteExaminer); expandable inline diff rows (accordion, one at a time)
+- Per-entity audit history pages — dedicated full-page paginated change history for each Study, Site, and Examiner; includes related junction audit entries
 - `EntityAuditLogDialog` — inline modal showing change history for a specific entity (used from detail pages)
 - `EntityAuditHistoryPage` — full-page server-paginated audit history with expandable inline diff panels (before→after per field)
-- Global search with debounced auto-search, entity type toggle, and context-aware filters
+- Global search with debounced auto-search, entity type toggle, context-aware filters, and filter-only search support
 - Collapsible sidebar navigation (separate Admin and Viewer sidebars)
 - Protected routes with `ProtectedRoute` (any auth) and `AdminRoute` (ADMIN role only)
-- Global Apollo error link — auto-redirects to `/login` on `UNAUTHENTICATED` errors
+- Global Apollo error link — auto-redirects to `/login` on `UNAUTHENTICATED` errors; deduplicates FORBIDDEN/INTERNAL_SERVER_ERROR toasts
 - Health check endpoint (`GET /health`) for backend liveness monitoring
 - Zod validation on both backend (server-side) and frontend (form validation via react-hook-form)
-- Auto-seeded database with 2 users, 20 studies, 20 sites, 20 examiners, and junction table links
+- Auto-seeded database with 2 users (ADMIN + VIEWER)
+- Loading skeletons for dashboard and detail pages
 
 ## Target Users
 - Developers learning full-stack GraphQL patterns with React + Apollo
@@ -34,12 +36,13 @@ SNA Demo is a full-stack clinical study management application demonstrating a m
 2. Log in as ADMIN → full CRUD on all entities, assignment management, audit logs
 3. Admin creates a study → audit log records the CREATE with afterJson snapshot
 4. Admin edits a study → audit log records the UPDATE with before/after JSON
-5. Admin assigns a site to a study via autocomplete picker on the study detail page
+5. Admin assigns a site to a study via autocomplete picker on the study detail page → audit log records ASSIGN with StudySite entityType
 6. Admin assigns an examiner to a site; site auto-activates when first examiner is assigned
-7. Admin assigns an examiner to a study at a specific site via checkbox panel (study_site_examiners)
+7. Admin assigns an examiner to a study at a specific site via checkbox panel (study_site_examiners) → audit log records ASSIGN with StudySiteExaminer entityType
 8. Admin unassigns last examiner from an Active site → site auto-downgrades to Planned
 9. Search across all entities with keyword + filters; results update as you type (debounced)
-10. Admin views per-entity change history at `/admin/studies/:id/history`, `/admin/sites/:id/history`, `/admin/examiners/:id/history`
+10. Admin views per-entity change history at `/admin/studies/:id/history`, `/admin/sites/:id/history`, `/admin/examiners/:id/history` — includes related junction audit entries
+11. Completed studies are locked — site and examiner assignments cannot be modified
 
 ## Seeded Credentials
 | Role   | Email           | Password    |
@@ -48,7 +51,13 @@ SNA Demo is a full-stack clinical study management application demonstrating a m
 | ADMIN  | admin@test.com  | password123 |
 
 ## Seeded Data
-- 20 Studies (STUDY-001 to STUDY-020) across Phase I–III, statuses: Active / Completed / Planned
-- 20 Sites (SITE-001 to SITE-020) across USA, Canada, UK, Germany, France, Japan, Australia, India, Brazil; statuses: Active / Closed
-- 20 Examiners (EX-001 to EX-020) with roles: Principal Investigator / Sub-Investigator
-- Junction tables: `study_sites` and `site_examiners` linking all three entities
+- 2 Users (ADMIN + VIEWER) — seeded automatically on first run
+- Studies, Sites, Examiners, and junction table links are NOT auto-seeded — the database starts empty except for users
+- Data must be created manually through the admin interface or by adding seed logic to `migrate.ts`
+
+## Project Completion Status
+The project is **fully implemented** — all features described in the README and architecture docs are complete:
+- ✅ Backend: all services, resolvers, schemas, validation, auth, audit logging
+- ✅ Frontend: all admin pages, viewer pages, CRUD dialogs, search, audit history
+- ✅ Domain rules: all study/site lifecycle rules enforced server-side
+- ✅ Security: HttpOnly cookies, bcrypt, Zod validation, role guards, parameterized SQL

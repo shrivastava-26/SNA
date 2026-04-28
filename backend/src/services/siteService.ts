@@ -2,6 +2,7 @@ import { GraphQLError } from 'graphql';
 import { queryAll, queryOne } from '../db/query';
 import { getDb } from '../db/connection';
 import { SiteRow, StudyRow, ExaminerRow } from '../types';
+import { hasValidCertificate } from './examinerService';
 
 export function getSitesPaged(page: number, pageSize: number): { rows: SiteRow[]; total: number } {
   const offset = (page - 1) * pageSize;
@@ -97,6 +98,11 @@ export function assignExaminerToSite(siteId: number, examinerId: number): void {
     });
   }
   if (!queryOne('SELECT id FROM examiners WHERE id = ?', [examinerId])) throw new GraphQLError('Examiner not found', { extensions: { code: 'BAD_USER_INPUT' } });
+  if (!hasValidCertificate(examinerId)) {
+    throw new GraphQLError('Examiner has no valid certificate (expired or missing).', {
+      extensions: { code: 'BAD_USER_INPUT', fieldErrors: { examinerId: 'Examiner has no valid certificate (expired or missing). Add or renew a certificate before assigning.' } },
+    });
+  }
   getDb().prepare('INSERT OR IGNORE INTO site_examiners (site_id, examiner_id) VALUES (?, ?)').run(siteId, examinerId);
 }
 

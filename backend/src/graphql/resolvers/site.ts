@@ -47,6 +47,7 @@ export const siteResolvers = {
       requireAdmin(context);
       parseOrThrow(siteExaminerSchema, { siteId, examinerId });
       assignExaminerToSite(Number(siteId), Number(examinerId));
+      logAudit(context, 'ASSIGN', 'SiteExaminer', Number(siteId), null, JSON.stringify({ siteId: Number(siteId), examinerId: Number(examinerId) }));
       return true;
     },
 
@@ -54,6 +55,7 @@ export const siteResolvers = {
       requireAdmin(context);
       parseOrThrow(siteExaminerSchema, { siteId, examinerId });
       unassignExaminerFromSite(Number(siteId), Number(examinerId));
+      logAudit(context, 'UNASSIGN', 'SiteExaminer', Number(siteId), JSON.stringify({ siteId: Number(siteId), examinerId: Number(examinerId) }), null);
       return true;
     },
   },

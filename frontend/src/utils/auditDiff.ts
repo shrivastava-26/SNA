@@ -17,6 +17,13 @@ export const FIELD_LABELS: Record<string, string> = {
   specialty: 'Specialty',
   email: 'Email',
   role: 'Role',
+  studyId: 'Study ID',
+  siteId: 'Site ID',
+  examinerId: 'Examiner ID',
+  certificateId: 'Certificate ID',
+  expiresOn: 'Expires On',
+  examiner_id: 'Examiner ID',
+  certificate_id: 'Certificate ID',
 };
 
 export function fieldLabel(key: string): string {
@@ -53,6 +60,8 @@ export function diffObjects(
 
 export function summaryText(log: AuditLog): string {
   if (log.action === 'CREATE') return 'Record created';
+  if (log.action === 'ASSIGN') return 'Assignment added';
+  if (log.action === 'UNASSIGN') return 'Assignment removed';
   const changes = diffObjects(parseJson(log.beforeJson), parseJson(log.afterJson));
   if (changes.length === 0) return 'No changes';
   return changes.map((c) => fieldLabel(c.field)).join(', ') + ' updated';

@@ -1,9 +1,21 @@
 export const studySchema = `#graphql
+  # Per-study, per-site examiner with linked certificate
+  type StudySiteExaminer {
+    id: ID!
+    examinerCode: String!
+    name: String!
+    specialty: String!
+    email: String!
+    role: String!
+    status: String!
+    certificate: ExaminerCertificate
+  }
+
   # Per-study, per-site examiner breakdown
   type StudySite {
     site: Site!
-    examiners: [Examiner!]!          # assigned to THIS study at THIS site
-    availableExaminers: [Examiner!]! # all examiners on the site (for admin picker)
+    examiners: [StudySiteExaminer!]!   # assigned to THIS study at THIS site (with certificate)
+    availableExaminers: [Examiner!]!   # all examiners on the site (for admin picker)
   }
 
   type Study {
@@ -58,7 +70,7 @@ export const studySchema = `#graphql
     updateStudy(id: ID!, input: UpdateStudyInput!): Study!
     assignSiteToStudy(studyId: ID!, siteId: ID!): Boolean!
     unassignSiteFromStudy(studyId: ID!, siteId: ID!): Boolean!
-    assignExaminerToStudySite(studyId: ID!, siteId: ID!, examinerId: ID!): Boolean!
+    assignExaminerToStudySite(studyId: ID!, siteId: ID!, examinerId: ID!, certificateId: ID): Boolean!
     unassignExaminerFromStudySite(studyId: ID!, siteId: ID!, examinerId: ID!): Boolean!
   }
 `;

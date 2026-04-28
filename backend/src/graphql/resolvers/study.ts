@@ -50,6 +50,7 @@ export const studyResolvers = {
       requireAdmin(context);
       parseOrThrow(assignmentSchema, { studyId, siteId });
       assignSiteToStudy(Number(studyId), Number(siteId));
+      logAudit(context, 'ASSIGN', 'StudySite', Number(studyId), null, JSON.stringify({ studyId: Number(studyId), siteId: Number(siteId) }));
       return true;
     },
 
@@ -57,20 +58,19 @@ export const studyResolvers = {
       requireAdmin(context);
       parseOrThrow(assignmentSchema, { studyId, siteId });
       unassignSiteFromStudy(Number(studyId), Number(siteId));
+      logAudit(context, 'UNASSIGN', 'StudySite', Number(studyId), JSON.stringify({ studyId: Number(studyId), siteId: Number(siteId) }), null);
       return true;
     },
 
-    // Assignment mutations are not logged via logAudit because they are junction-table
-    // operations (not CREATE/UPDATE of entity rows). Consistent with existing
-    // assignSiteToStudy / assignExaminerToSite which also skip audit logging.
     assignExaminerToStudySite(
       _: unknown,
-      { studyId, siteId, examinerId }: { studyId: string; siteId: string; examinerId: string },
+      { studyId, siteId, examinerId, certificateId }: { studyId: string; siteId: string; examinerId: string; certificateId?: string },
       context: GraphQLContext
     ) {
       requireAdmin(context);
-      parseOrThrow(studySiteExaminerSchema, { studyId, siteId, examinerId });
-      assignExaminerToStudySite(Number(studyId), Number(siteId), Number(examinerId));
+      parseOrThrow(studySiteExaminerSchema, { studyId, siteId, examinerId, ...(certificateId ? { certificateId } : {}) });
+      assignExaminerToStudySite(Number(studyId), Number(siteId), Number(examinerId), certificateId ? Number(certificateId) : undefined);
+      logAudit(context, 'ASSIGN', 'StudySiteExaminer', Number(studyId), null, JSON.stringify({ studyId: Number(studyId), siteId: Number(siteId), examinerId: Number(examinerId), ...(certificateId ? { certificateId: Number(certificateId) } : {}) }));
       return true;
     },
 
@@ -82,6 +82,7 @@ export const studyResolvers = {
       requireAdmin(context);
       parseOrThrow(studySiteExaminerSchema, { studyId, siteId, examinerId });
       unassignExaminerFromStudySite(Number(studyId), Number(siteId), Number(examinerId));
+      logAudit(context, 'UNASSIGN', 'StudySiteExaminer', Number(studyId), JSON.stringify({ studyId: Number(studyId), siteId: Number(siteId), examinerId: Number(examinerId) }), null);
       return true;
     },
   },

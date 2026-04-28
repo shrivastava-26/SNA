@@ -17,6 +17,7 @@
 | Auth — passwords  | bcryptjs 2.4               |
 | Cookie parsing    | cookie-parser 1.4          |
 | CORS              | cors 2.8                   |
+| Env loading       | dotenv 16.4                |
 | Validation        | zod 4.3                    |
 | Dev server        | ts-node-dev 2.0            |
 
@@ -85,31 +86,31 @@ VITE_GRAPHQL_URL=http://localhost:4040/graphql
 |------------------------------------|-------|------------------------------------------------|
 | `query me`                         | ✅    | Returns current user with role                 |
 | `query getStudies(page, pageSize)` | ✅    | Paginated studies → `StudyPage{rows,total}`    |
-| `query getStudy(id)`               | ✅    | Single study with nested sites + examiners     |
+| `query getStudy(id)`               | ✅    | Single study with nested sites + examiners + studySites |
 | `query getSites(page, pageSize)`   | ✅    | Paginated sites → `SitePage{rows,total}`       |
 | `query getSite(id)`                | ✅    | Single site with nested studies + examiners    |
 | `query getExaminers(page,pageSize)`| ✅    | Paginated examiners → `ExaminerPage{rows,total}`|
 | `query getExaminer(id)`            | ✅    | Single examiner with nested studies + sites    |
 | `query globalSearch(keyword,filters)`| ✅  | Cross-entity keyword search with filters       |
-| `query getAuditLogs(entityType,entityId,page,pageSize)`| 🔒 ADMIN | Paginated audit log entries ordered DESC |
+| `query getAuditLogs(entityType,entityTypes,entityId,page,pageSize)`| 🔒 ADMIN | Paginated audit log entries ordered DESC; entityTypes array takes priority over single entityType |
 
 ### Mutations
 | Operation                              | Auth       | Description                          |
 |----------------------------------------|------------|--------------------------------------|
 | `mutation login(email, password)`      | ❌         | Sets HttpOnly cookie, returns user+role |
 | `mutation logout`                      | ✅         | Clears HttpOnly cookie               |
-| `mutation createStudy(input)`          | 🔒 ADMIN   | Creates study, logs audit            |
-| `mutation updateStudy(id, input)`      | 🔒 ADMIN   | Updates study, logs audit            |
-| `mutation assignSiteToStudy(studyId, siteId)` | 🔒 ADMIN | Links site to study             |
-| `mutation unassignSiteFromStudy(studyId, siteId)` | 🔒 ADMIN | Unlinks site from study (blocked if SSE rows exist) |
-| `mutation assignExaminerToStudySite(studyId, siteId, examinerId)` | 🔒 ADMIN | Links examiner to study at a specific site (3-way SSE) |
-| `mutation unassignExaminerFromStudySite(studyId, siteId, examinerId)` | 🔒 ADMIN | Unlinks examiner from study at a specific site |
-| `mutation createSite(input)`           | 🔒 ADMIN   | Creates site, logs audit             |
-| `mutation updateSite(id, input)`       | 🔒 ADMIN   | Updates site (domain rules apply), logs audit |
-| `mutation assignExaminerToSite(siteId, examinerId)` | 🔒 ADMIN | Links examiner to site    |
-| `mutation unassignExaminerFromSite(siteId, examinerId)` | 🔒 ADMIN | Unlinks examiner; auto-downgrades site if last |
-| `mutation createExaminer(input)`       | 🔒 ADMIN   | Creates examiner, logs audit         |
-| `mutation updateExaminer(id, input)`   | 🔒 ADMIN   | Updates examiner, logs audit         |
+| `mutation createStudy(input)`          | 🔒 ADMIN   | Creates study, logs audit (CREATE/Study) |
+| `mutation updateStudy(id, input)`      | 🔒 ADMIN   | Updates study, logs audit (UPDATE/Study) |
+| `mutation assignSiteToStudy(studyId, siteId)` | 🔒 ADMIN | Links site to study, logs audit (ASSIGN/StudySite) |
+| `mutation unassignSiteFromStudy(studyId, siteId)` | 🔒 ADMIN | Unlinks site from study (blocked if SSE rows exist), logs audit (UNASSIGN/StudySite) |
+| `mutation assignExaminerToStudySite(studyId, siteId, examinerId)` | 🔒 ADMIN | Links examiner to study at a specific site (3-way SSE), logs audit (ASSIGN/StudySiteExaminer) |
+| `mutation unassignExaminerFromStudySite(studyId, siteId, examinerId)` | 🔒 ADMIN | Unlinks examiner from study at a specific site, logs audit (UNASSIGN/StudySiteExaminer) |
+| `mutation createSite(input)`           | 🔒 ADMIN   | Creates site (always Planned), logs audit (CREATE/Site) |
+| `mutation updateSite(id, input)`       | 🔒 ADMIN   | Updates site (domain rules apply), logs audit (UPDATE/Site) |
+| `mutation assignExaminerToSite(siteId, examinerId)` | 🔒 ADMIN | Links examiner to site, logs audit (ASSIGN/SiteExaminer) |
+| `mutation unassignExaminerFromSite(siteId, examinerId)` | 🔒 ADMIN | Unlinks examiner; auto-downgrades site if last, logs audit (UNASSIGN/SiteExaminer) |
+| `mutation createExaminer(input)`       | 🔒 ADMIN   | Creates examiner, logs audit (CREATE/Examiner) |
+| `mutation updateExaminer(id, input)`   | 🔒 ADMIN   | Updates examiner, logs audit (UPDATE/Examiner) |
 
 ## Database
 - Engine: SQLite via `better-sqlite3` (synchronous API)
@@ -117,5 +118,5 @@ VITE_GRAPHQL_URL=http://localhost:4040/graphql
 - No ORM — raw SQL with typed helpers in `db/query.ts`
 - Schema + indexes + migration shims in `db/migrate.ts`
 - Tables: `users`, `studies`, `sites`, `examiners`, `study_sites`, `site_examiners`, `study_site_examiners`, `audit_logs`
-- Seed: 2 users (ADMIN + VIEWER), 20 studies, 20 sites, 20 examiners, ~55 study-site links, ~40 site-examiner links
-- Migration shims: `ALTER TABLE ... ADD COLUMN` wrapped in try/catch for backward compatibility
+- Seed: 2 users (ADMIN + VIEWER) only — no study/site/examiner seed data
+- Migration shims: `ALTER TABLE ... ADD COLUMN` wrapped in try/catch for backward compatibility; audit_logs table recreated if old CHECK constraint rejects ASSIGN

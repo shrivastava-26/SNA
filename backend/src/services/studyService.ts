@@ -1,7 +1,8 @@
 import { GraphQLError } from 'graphql';
 import { queryOne, queryAll } from '../db/query';
 import { getDb } from '../db/connection';
-import { StudyRow, SiteRow, ExaminerRow } from '../types';
+import { StudyRow, SiteRow, ExaminerRow, ExaminerCertificateRow } from '../types';
+import { hasValidCertificate, getCertificatesByExaminer, getCertificateById } from './examinerService';
 
 // ── Policy flags ─────────────────────────────────────────────────────────
 // D8: When true, transitioning Active → Completed is rejected if any assigned
@@ -282,10 +283,10 @@ export function assignSiteToStudy(studyId: number, siteId: number): void {
   if (!getStudyById(studyId)) throw new GraphQLError('Study not found', { extensions: { code: 'BAD_USER_INPUT' } });
   const site = queryOne<SiteRow>('SELECT * FROM sites WHERE id = ?', [siteId]);
   if (!site) throw new GraphQLError('Site not found', { extensions: { code: 'BAD_USER_INPUT' } });
-  // SI1: cannot assign a Closed site to a study
-  if (site.status === 'Closed') {
-    throw new GraphQLError('Cannot assign a Closed site to a study.', {
-      extensions: { code: 'BAD_USER_INPUT', fieldErrors: { siteId: 'Site is Closed and cannot be assigned to a study.' } },
+  // SI1: only Active sites can be assigned to a study
+  if (site.status !== 'Active') {
+    throw new GraphQLError(`Cannot assign a ${site.status} site to a study. Only Active sites can be assigned.`, {
+      extensions: { code: 'BAD_USER_INPUT', fieldErrors: { siteId: `Site is ${site.status}. Only Active sites can be assigned to a study.` } },
     });
   }
   getDb().prepare('INSERT OR IGNORE INTO study_sites (study_id, site_id) VALUES (?, ?)').run(studyId, siteId);
@@ -318,9 +319,13 @@ export function unassignSiteFromStudy(studyId: number, siteId: number): void {
   getDb().prepare('DELETE FROM study_sites WHERE study_id = ? AND site_id = ?').run(studyId, siteId);
 }
 
+export interface SSEExaminer extends ExaminerRow {
+  certificate: ExaminerCertificateRow | null;
+}
+
 export interface StudySiteWithExaminers {
   site: SiteRow;
-  examiners: ExaminerRow[];       // assigned to this study at this site
+  examiners: SSEExaminer[];          // assigned to this study at this site (with certificate)
   availableExaminers: ExaminerRow[]; // all examiners assigned to this site
 }
 
@@ -337,15 +342,27 @@ export function getStudySitesWithStudyExaminers(studyId: number): StudySiteWithE
   const siteIds = sites.map((s) => s.id);
   const placeholders = siteIds.map(() => '?').join(',');
 
-  // All examiners assigned to this study at any of its sites
-  type SSERow = ExaminerRow & { site_id: number };
+  // All examiners assigned to this study at any of its sites (with certificate_id)
+  type SSERow = ExaminerRow & { site_id: number; certificate_id: number };
   const assignedRows = queryAll<SSERow>(
-    `SELECT e.*, sse.site_id FROM examiners e
+    `SELECT e.*, sse.site_id, sse.certificate_id FROM examiners e
      JOIN study_site_examiners sse ON sse.examiner_id = e.id
      WHERE sse.study_id = ? AND sse.site_id IN (${placeholders})
      ORDER BY e.id ASC`,
     [studyId, ...siteIds]
   );
+
+  // Bulk-fetch all referenced certificates
+  const certIds = [...new Set(assignedRows.map((r) => r.certificate_id).filter(Boolean))];
+  const certMap = new Map<number, ExaminerCertificateRow>();
+  if (certIds.length > 0) {
+    const certPh = certIds.map(() => '?').join(',');
+    const certs = queryAll<ExaminerCertificateRow>(
+      `SELECT * FROM examiner_certificates WHERE id IN (${certPh})`,
+      certIds
+    );
+    for (const c of certs) certMap.set(c.id, c);
+  }
 
   // All examiners available at any of the study's sites
   type SERow = ExaminerRow & { site_id: number };
@@ -358,14 +375,15 @@ export function getStudySitesWithStudyExaminers(studyId: number): StudySiteWithE
   );
 
   // Group in memory
-  const assignedBySite = new Map<number, ExaminerRow[]>();
+  const assignedBySite = new Map<number, SSEExaminer[]>();
   const availableBySite = new Map<number, ExaminerRow[]>();
   for (const siteId of siteIds) {
     assignedBySite.set(siteId, []);
     availableBySite.set(siteId, []);
   }
   for (const row of assignedRows) {
-    assignedBySite.get(row.site_id)!.push(row);
+    const cert = certMap.get(row.certificate_id) ?? null;
+    assignedBySite.get(row.site_id)!.push({ ...row, certificate: cert });
   }
   for (const row of availableRows) {
     availableBySite.get(row.site_id)!.push(row);
@@ -381,7 +399,8 @@ export function getStudySitesWithStudyExaminers(studyId: number): StudySiteWithE
 export function assignExaminerToStudySite(
   studyId: number,
   siteId: number,
-  examinerId: number
+  examinerId: number,
+  certificateId?: number
 ): void {
   // Rule (a): site must be assigned to the study
   if (!queryOne('SELECT 1 FROM study_sites WHERE study_id = ? AND site_id = ?', [studyId, siteId])) {
@@ -402,9 +421,40 @@ export function assignExaminerToStudySite(
       extensions: { code: 'BAD_USER_INPUT', fieldErrors: { examinerId: 'Examiner is not assigned to this site' } },
     });
   }
+
+  // Resolve which certificate to use
+  const today = todayUTC();
+  let resolvedCertId: number;
+
+  if (certificateId) {
+    // Explicit certificate — validate it
+    const cert = getCertificateById(certificateId);
+    if (!cert || cert.examiner_id !== examinerId) {
+      throw new GraphQLError('Certificate does not belong to this examiner.', {
+        extensions: { code: 'BAD_USER_INPUT', fieldErrors: { certificateId: 'Certificate does not belong to this examiner.' } },
+      });
+    }
+    if (cert.expiresOn < today) {
+      throw new GraphQLError('Selected certificate is expired.', {
+        extensions: { code: 'BAD_USER_INPUT', fieldErrors: { certificateId: 'This certificate has expired. Choose a valid one.' } },
+      });
+    }
+    resolvedCertId = cert.id;
+  } else {
+    // Auto-select: pick the valid certificate with the latest expiry
+    const validCerts = getCertificatesByExaminer(examinerId).filter((c) => c.expiresOn >= today);
+    if (validCerts.length === 0) {
+      throw new GraphQLError('Examiner has no valid certificate (expired or missing).', {
+        extensions: { code: 'BAD_USER_INPUT', fieldErrors: { examinerId: 'Examiner has no valid certificate. Add or renew a certificate before assigning.' } },
+      });
+    }
+    // validCerts already sorted DESC by expiresOn from getCertificatesByExaminer
+    resolvedCertId = validCerts[0].id;
+  }
+
   getDb()
-    .prepare('INSERT OR IGNORE INTO study_site_examiners (study_id, site_id, examiner_id) VALUES (?, ?, ?)')
-    .run(studyId, siteId, examinerId);
+    .prepare('INSERT OR IGNORE INTO study_site_examiners (study_id, site_id, examiner_id, certificate_id) VALUES (?, ?, ?, ?)')
+    .run(studyId, siteId, examinerId, resolvedCertId);
 }
 
 export function unassignExaminerFromStudySite(

@@ -8,32 +8,38 @@ export interface AuditLogsPage {
 
 export function getAuditLogs(
   entityType?: string,
+  entityTypes?: string[],
   entityId?: number,
   page = 1,
   pageSize = 25
 ): AuditLogsPage {
   const offset = (page - 1) * pageSize;
 
-  if (entityType && entityId !== undefined) {
+  // Resolve the effective type filter: entityTypes array takes priority over single entityType
+  const types = entityTypes?.length ? entityTypes : entityType ? [entityType] : null;
+
+  if (types && entityId !== undefined) {
+    const placeholders = types.map(() => '?').join(',');
     const rows = queryAll<AuditLogRow>(
-      `SELECT * FROM audit_logs WHERE entityType = ? AND entityId = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
-      [entityType, entityId, pageSize, offset]
+      `SELECT * FROM audit_logs WHERE entityType IN (${placeholders}) AND entityId = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...types, entityId, pageSize, offset]
     );
     const total = (queryOne<{ cnt: number }>(
-      `SELECT COUNT(*) as cnt FROM audit_logs WHERE entityType = ? AND entityId = ?`,
-      [entityType, entityId]
+      `SELECT COUNT(*) as cnt FROM audit_logs WHERE entityType IN (${placeholders}) AND entityId = ?`,
+      [...types, entityId]
     ) ?? { cnt: 0 }).cnt;
     return { rows, total };
   }
 
-  if (entityType) {
+  if (types) {
+    const placeholders = types.map(() => '?').join(',');
     const rows = queryAll<AuditLogRow>(
-      `SELECT * FROM audit_logs WHERE entityType = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
-      [entityType, pageSize, offset]
+      `SELECT * FROM audit_logs WHERE entityType IN (${placeholders}) ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...types, pageSize, offset]
     );
     const total = (queryOne<{ cnt: number }>(
-      `SELECT COUNT(*) as cnt FROM audit_logs WHERE entityType = ?`,
-      [entityType]
+      `SELECT COUNT(*) as cnt FROM audit_logs WHERE entityType IN (${placeholders})`,
+      types
     ) ?? { cnt: 0 }).cnt;
     return { rows, total };
   }

@@ -37,8 +37,8 @@ export const GET_STUDY_QUERY = gql`
       examiners { id examinerCode name specialty role email status }
       studySites {
         site { id siteCode name city country status }
-        examiners { id examinerCode name specialty role email status }
-        availableExaminers { id examinerCode name specialty role email status }
+        examiners { id examinerCode name specialty role email status certificate { id certificateId expiresOn } }
+        availableExaminers { id examinerCode name specialty role email status certificates { id certificateId expiresOn } }
       }
     }
   }

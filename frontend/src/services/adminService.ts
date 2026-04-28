@@ -26,8 +26,8 @@ export const UNASSIGN_SITE_FROM_STUDY = gql`
 `;
 
 export const ASSIGN_EXAMINER_TO_STUDY_SITE = gql`
-  mutation AssignExaminerToStudySite($studyId: ID!, $siteId: ID!, $examinerId: ID!) {
-    assignExaminerToStudySite(studyId: $studyId, siteId: $siteId, examinerId: $examinerId)
+  mutation AssignExaminerToStudySite($studyId: ID!, $siteId: ID!, $examinerId: ID!, $certificateId: ID) {
+    assignExaminerToStudySite(studyId: $studyId, siteId: $siteId, examinerId: $examinerId, certificateId: $certificateId)
   }
 `;
 
@@ -75,12 +75,24 @@ export const UPDATE_EXAMINER_MUTATION = gql`
   }
 `;
 
+export const ADD_EXAMINER_CERTIFICATE_MUTATION = gql`
+  mutation AddExaminerCertificate($examinerId: ID!, $input: CreateExaminerCertificateInput!) {
+    addExaminerCertificate(examinerId: $examinerId, input: $input) { id certificateId expiresOn }
+  }
+`;
+
+export const UPDATE_EXAMINER_CERTIFICATE_MUTATION = gql`
+  mutation UpdateExaminerCertificate($id: ID!, $input: UpdateExaminerCertificateInput!) {
+    updateExaminerCertificate(id: $id, input: $input) { id certificateId expiresOn }
+  }
+`;
+
 // Search query moved to services/searchService.ts
 
 // Audit logs
 export const GET_AUDIT_LOGS_QUERY = gql`
-  query GetAuditLogs($entityType: String, $entityId: Int, $page: Int, $pageSize: Int) {
-    getAuditLogs(entityType: $entityType, entityId: $entityId, page: $page, pageSize: $pageSize) {
+  query GetAuditLogs($entityType: String, $entityTypes: [String!], $entityId: Int, $page: Int, $pageSize: Int) {
+    getAuditLogs(entityType: $entityType, entityTypes: $entityTypes, entityId: $entityId, page: $page, pageSize: $pageSize) {
       total
       rows {
         id actorEmail action entityType entityId beforeJson afterJson createdAt

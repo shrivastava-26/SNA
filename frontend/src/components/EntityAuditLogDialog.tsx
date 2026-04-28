@@ -29,7 +29,8 @@ function AuditEntry({ log }: { log: AuditLog }) {
   const before = parseJson(log.beforeJson);
   const after = parseJson(log.afterJson);
   const changes = diffObjects(before, after);
-  const isCreate = log.action === 'CREATE';
+  const isSnapshot = log.action === 'CREATE' || log.action === 'ASSIGN' || log.action === 'UNASSIGN';
+  const snapshot = after ?? before;
 
   return (
     <Box sx={{ mb: 2.5 }}>
@@ -37,7 +38,7 @@ function AuditEntry({ log }: { log: AuditLog }) {
         <Chip
           label={log.action}
           size="small"
-          color={isCreate ? 'success' : 'warning'}
+          color={isSnapshot && log.action === 'CREATE' ? 'success' : log.action === 'ASSIGN' ? 'info' : log.action === 'UNASSIGN' ? 'error' : 'warning'}
           variant="outlined"
           sx={{ fontWeight: 700, fontSize: '0.72rem' }}
         />
@@ -51,16 +52,20 @@ function AuditEntry({ log }: { log: AuditLog }) {
         </Box>
       </Box>
 
-      {isCreate && after ? (
+      {isSnapshot && snapshot ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-          {Object.entries(after)
+          {Object.entries(snapshot)
             .filter(([k]) => !['id', 'password'].includes(k))
             .map(([k, v]) => (
               <Box key={k} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', minWidth: 120 }}>
                   {fieldLabel(k)}
                 </Typography>
-                <Typography variant="caption" sx={{ px: 0.8, py: 0.2, bgcolor: '#f0fdf4', color: '#15803d', borderRadius: 0.5, fontFamily: 'monospace' }}>
+                <Typography variant="caption" sx={{
+                  px: 0.8, py: 0.2, borderRadius: 0.5, fontFamily: 'monospace',
+                  bgcolor: log.action === 'UNASSIGN' ? '#fef2f2' : '#f0fdf4',
+                  color: log.action === 'UNASSIGN' ? '#b91c1c' : '#15803d',
+                }}>
                   {String(v ?? '—')}
                 </Typography>
               </Box>
@@ -92,11 +97,17 @@ function AuditEntry({ log }: { log: AuditLog }) {
   );
 }
 
+const RELATED_ENTITY_TYPES: Record<string, string[]> = {
+  Study: ['Study', 'StudySite', 'StudySiteExaminer'],
+  Site: ['Site', 'SiteExaminer'],
+  Examiner: ['Examiner', 'ExaminerCertificate'],
+};
+
 export function EntityAuditLogDialog({
   open, onClose, entityType, entityId, entityLabel,
 }: EntityAuditLogDialogProps) {
   const { data, loading, error } = useQuery(GET_AUDIT_LOGS_QUERY, {
-    variables: { entityType, entityId, page: 1, pageSize: 100 },
+    variables: { entityTypes: RELATED_ENTITY_TYPES[entityType] ?? [entityType], entityId, page: 1, pageSize: 100 },
     skip: !open,
     fetchPolicy: 'network-only',
   });

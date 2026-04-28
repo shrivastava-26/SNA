@@ -8,14 +8,15 @@ export const auditResolvers = {
       _: unknown,
       {
         entityType,
+        entityTypes,
         entityId,
         page = 1,
         pageSize = 25,
-      }: { entityType?: string; entityId?: number; page?: number; pageSize?: number },
+      }: { entityType?: string; entityTypes?: string[]; entityId?: number; page?: number; pageSize?: number },
       context: GraphQLContext
     ) {
       requireAdmin(context);
-      return getAuditLogs(entityType, entityId, page, pageSize);
+      return getAuditLogs(entityType, entityTypes, entityId, page, pageSize);
     },
   },
 };

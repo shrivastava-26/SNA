@@ -12,7 +12,7 @@ import { RelatedDataGrid } from '../../components/RelatedDataGrid';
 import { StatusChip } from '../../components/StatusChip';
 import { DetailPageSkeleton } from '../../components/skeletons';
 import { useStudy } from '../../hooks/useStudy';
-import { StudySite } from '../../types';
+import { StudySite, StudySiteExaminer } from '../../types';
 
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
@@ -34,6 +34,18 @@ function ViewerStudySitePanel({ studySite }: { studySite: StudySite }) {
     { field: 'role', headerName: 'Role', width: 160 },
     { field: 'email', headerName: 'Email', flex: 1, minWidth: 180 },
     { field: 'status', headerName: 'Status', width: 110, renderCell: (p) => <StatusChip status={p.value} /> },
+    {
+      field: 'certificate', headerName: 'Certificate', width: 200,
+      renderCell: (p) => {
+        const cert = (p.row as StudySiteExaminer).certificate;
+        if (!cert) return <Typography variant="caption" color="text.secondary">—</Typography>;
+        return (
+          <Typography variant="caption">
+            {cert.certificateId} (exp {cert.expiresOn})
+          </Typography>
+        );
+      },
+    },
   ];
 
   return (

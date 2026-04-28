@@ -3,6 +3,13 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import Chip from '@mui/material/Chip';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
 import { GridColDef } from '@mui/x-data-grid';
 import { ViewerLayout } from '../../components/shared/ViewerLayout';
 import { DetailPageHeader } from '../../components/DetailPageHeader';
@@ -18,6 +25,10 @@ function InfoField({ label, value }: { label: string; value: string }) {
       <Typography variant="body2" sx={{ fontWeight: 500, mt: 0.3 }} color="text.primary">{value || '—'}</Typography>
     </Box>
   );
+}
+
+function isCertValid(expiresOn: string): boolean {
+  return expiresOn >= new Date().toISOString().slice(0, 10);
 }
 
 export function ViewerExaminerDetailPage() {
@@ -59,6 +70,43 @@ export function ViewerExaminerDetailPage() {
           </Paper>
           <RelatedDataGrid title="Linked Studies" rows={examiner.studies ?? []} columns={studyColumns} emptyMessage="No studies linked to this examiner" emptySubMessage="This examiner has not been assigned to any studies yet." />
           <RelatedDataGrid title="Assigned Sites" rows={examiner.sites ?? []} columns={siteColumns} emptyMessage="No sites linked to this examiner" emptySubMessage="This examiner has not been assigned to any clinical sites yet." />
+
+          {(examiner.certificates ?? []).length > 0 && (
+            <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Certificates</Typography>
+                <Chip label={examiner.certificates!.length} size="small" sx={{ bgcolor: '#e0f2f1', color: '#0f766e', fontWeight: 700, fontSize: '0.72rem' }} />
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Certificate ID</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Expires On</TableCell>
+                      <TableCell sx={{ fontWeight: 700, width: 100 }}>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {examiner.certificates!.map((cert) => (
+                      <TableRow key={cert.id}>
+                        <TableCell>{cert.certificateId}</TableCell>
+                        <TableCell>{cert.expiresOn}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={isCertValid(cert.expiresOn) ? 'Valid' : 'Expired'}
+                            size="small"
+                            color={isCertValid(cert.expiresOn) ? 'success' : 'error'}
+                            variant="outlined"
+                            sx={{ fontWeight: 700, fontSize: '0.72rem' }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
         </>
       )}
     </ViewerLayout>

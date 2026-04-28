@@ -17,7 +17,7 @@ export function requireAdmin(context: GraphQLContext): void {
 
 export function logAudit(
   context: GraphQLContext,
-  action: 'CREATE' | 'UPDATE',
+  action: 'CREATE' | 'UPDATE' | 'ASSIGN' | 'UNASSIGN',
   entityType: string,
   entityId: number,
   beforeJson: string | null,

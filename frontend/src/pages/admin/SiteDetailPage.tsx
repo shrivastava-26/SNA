@@ -21,6 +21,7 @@ import { useSite } from '../../hooks/useSite';
 import { useExaminersPicker } from '../../hooks/useExaminersPicker';
 import { ASSIGN_EXAMINER_TO_SITE, UNASSIGN_EXAMINER_FROM_SITE } from '../../services/adminService';
 import { GET_SITE_QUERY } from '../../services/siteService';
+import { parseGqlError } from '../../utils/gqlErrors';
 
 interface ExaminerOption {
   id: string;
@@ -66,8 +67,9 @@ export function AdminSiteDetailPage() {
       await assignExaminer({ variables: { siteId: id, examinerId: selectedExaminer.id } });
       enqueueSnackbar(`${selectedExaminer.name} assigned to site.`, { variant: 'success' });
       setSelectedExaminer(null);
-    } catch {
-      enqueueSnackbar('Failed to assign examiner.', { variant: 'error' });
+    } catch (err: unknown) {
+      const { message } = parseGqlError(err);
+      enqueueSnackbar(message || 'Failed to assign examiner.', { variant: 'error' });
     }
   }
 
@@ -75,8 +77,9 @@ export function AdminSiteDetailPage() {
     try {
       await unassignExaminer({ variables: { siteId: id, examinerId } });
       enqueueSnackbar(`${examinerName} unassigned from site.`, { variant: 'info' });
-    } catch {
-      enqueueSnackbar('Failed to unassign examiner.', { variant: 'error' });
+    } catch (err: unknown) {
+      const { message } = parseGqlError(err);
+      enqueueSnackbar(message || 'Failed to unassign examiner.', { variant: 'error' });
     }
   }
 

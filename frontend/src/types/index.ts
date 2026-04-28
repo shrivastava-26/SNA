@@ -13,10 +13,21 @@ export interface Study {
   studySites?: StudySite[];
 }
 
+export interface StudySiteExaminer {
+  id: string;
+  examinerCode: string;
+  name: string;
+  specialty: string;
+  email: string;
+  role: string;
+  status: string;
+  certificate?: ExaminerCertificate | null;
+}
+
 export interface StudySite {
   site: Site;
-  examiners: Examiner[];            // assigned to this study at this site
-  availableExaminers: Examiner[];   // all examiners on the site
+  examiners: StudySiteExaminer[];     // assigned to this study at this site (with certificate)
+  availableExaminers: Examiner[];     // all examiners on the site
 }
 
 export interface Site {
@@ -30,6 +41,12 @@ export interface Site {
   examiners?: Examiner[];
 }
 
+export interface ExaminerCertificate {
+  id: string;
+  certificateId: string;
+  expiresOn: string;
+}
+
 export interface Examiner {
   id: string;
   examinerCode: string;
@@ -40,6 +57,7 @@ export interface Examiner {
   status: string;
   studies?: Study[];
   sites?: Site[];
+  certificates?: ExaminerCertificate[];
 }
 
 export interface AuditLog {

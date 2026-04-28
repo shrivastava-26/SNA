@@ -29,21 +29,26 @@ import { fieldLabel, parseJson, diffObjects, summaryText } from '../../utils/aud
 function DiffDetail({ log }: { log: AuditLog }) {
   const before = parseJson(log.beforeJson);
   const after = parseJson(log.afterJson);
-  const isCreate = log.action === 'CREATE';
+  const isSnapshot = log.action === 'CREATE' || log.action === 'ASSIGN' || log.action === 'UNASSIGN';
+  const snapshot = after ?? before;
   const changes = diffObjects(before, after);
 
   return (
     <Box sx={{ px: 3, py: 2, bgcolor: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-      {isCreate && after ? (
+      {isSnapshot && snapshot ? (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {Object.entries(after)
+          {Object.entries(snapshot)
             .filter(([k]) => !['id', 'password'].includes(k))
             .map(([k, v]) => (
               <Box key={k} sx={{ display: 'flex', gap: 0.5, alignItems: 'baseline' }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
                   {fieldLabel(k)}:
                 </Typography>
-                <Typography variant="caption" sx={{ px: 0.7, py: 0.15, bgcolor: '#f0fdf4', color: '#15803d', borderRadius: 0.5, fontFamily: 'monospace' }}>
+                <Typography variant="caption" sx={{
+                  px: 0.7, py: 0.15, borderRadius: 0.5, fontFamily: 'monospace',
+                  bgcolor: log.action === 'UNASSIGN' ? '#fef2f2' : '#f0fdf4',
+                  color: log.action === 'UNASSIGN' ? '#b91c1c' : '#15803d',
+                }}>
                   {String(v ?? '—')}
                 </Typography>
               </Box>
@@ -76,7 +81,7 @@ function DiffDetail({ log }: { log: AuditLog }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────
-const ENTITY_TYPES = ['', 'Study', 'Site', 'Examiner'] as const;
+const ENTITY_TYPES = ['', 'Study', 'Site', 'Examiner', 'ExaminerCertificate', 'StudySite', 'SiteExaminer', 'StudySiteExaminer'] as const;
 
 export function AuditLogsPage() {
   const [page, setPage] = useState(0);
@@ -114,7 +119,7 @@ export function AuditLogsPage() {
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>Audit Logs</Typography>
           <Typography variant="body2" color="text.secondary">
-            All admin create and update actions. Click any row to see what changed.
+            All admin actions — create, update, assign, and unassign. Click any row to see details.
           </Typography>
         </Box>
         <TextField
@@ -194,7 +199,7 @@ export function AuditLogsPage() {
                           <Chip
                             label={log.action}
                             size="small"
-                            color={log.action === 'CREATE' ? 'success' : 'warning'}
+                            color={log.action === 'CREATE' ? 'success' : log.action === 'ASSIGN' ? 'info' : log.action === 'UNASSIGN' ? 'error' : 'warning'}
                             variant="outlined"
                             sx={{ fontWeight: 700, fontSize: '0.72rem' }}
                           />

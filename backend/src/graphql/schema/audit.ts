@@ -19,6 +19,7 @@ export const auditSchema = `#graphql
   extend type Query {
     getAuditLogs(
       entityType: String
+      entityTypes: [String!]
       entityId: Int
       page: Int
       pageSize: Int

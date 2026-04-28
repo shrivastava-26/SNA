@@ -29,10 +29,10 @@ import { useUrlPagination } from '../../hooks/useUrlPagination';
 import { Site } from '../../types';
 import { CREATE_SITE_MUTATION, UPDATE_SITE_MUTATION } from '../../services/adminService';
 import { GET_SITES_QUERY } from '../../services/siteService';
-import { createSiteSchema, updateSiteSchema, CreateSiteFormValues, UpdateSiteFormValues } from '../../validation';
+import { createSiteSchema, updateSiteSchema, CreateSiteFormValues, UpdateSiteFormValues, nextAllowedSiteStatus } from '../../validation';
 import { parseGqlError } from '../../utils/gqlErrors';
 
-const STATUSES = ['Planned', 'Active', 'Closed'] as const;
+
 
 const stepperSx = {
   mb: 3,
@@ -148,6 +148,9 @@ function EditSiteDialog({ site, onClose }: { site: Site; onClose: () => void }) 
   const [activeStep, setActiveStep] = useState(0);
   const [updateSite, { loading }] = useMutation(UPDATE_SITE_MUTATION, { refetchQueries: [GET_SITES_QUERY] });
 
+  const allowedNextSite = nextAllowedSiteStatus(site.status);
+  const siteStatusOptions: string[] = allowedNextSite ? [site.status, allowedNextSite] : [site.status];
+
   const { register, handleSubmit, setError, trigger, formState: { errors, isDirty } } =
     useForm<UpdateSiteFormValues>({
       resolver: zodResolver(updateSiteSchema),
@@ -198,8 +201,8 @@ function EditSiteDialog({ site, onClose }: { site: Site; onClose: () => void }) 
               {...register('status')} error={!!errors.status}
               helperText={errors.status?.message ?? (site.status === 'Closed' ? 'Closed sites cannot be re-opened.' : undefined)}
               disabled={site.status === 'Closed'}>
-              {STATUSES.filter((s) => site.status !== 'Closed' || s === 'Closed').map((s) => (
-                <MenuItem key={s} value={s}>{s}</MenuItem>
+              {siteStatusOptions.map((s) => (
+                <MenuItem key={s} value={s} disabled={s === site.status}>{s}</MenuItem>
               ))}
             </TextField>
           </Box>

@@ -21,3 +21,16 @@ export const updateExaminerSchema = z.object({
 
 export type CreateExaminerFormValues = z.infer<typeof createExaminerSchema>;
 export type UpdateExaminerFormValues = z.infer<typeof updateExaminerSchema>;
+
+export const createCertificateSchema = z.object({
+  certificateId: z.string().min(1, 'Certificate ID is required').max(100),
+  expiresOn: z.string().min(1, 'Expiry date is required'),
+});
+
+export const updateCertificateSchema = z.object({
+  certificateId: z.string().min(1, 'Certificate ID is required').max(100).optional(),
+  expiresOn: z.string().min(1, 'Expiry date is required').optional(),
+});
+
+export type CreateCertificateFormValues = z.infer<typeof createCertificateSchema>;
+export type UpdateCertificateFormValues = z.infer<typeof updateCertificateSchema>;

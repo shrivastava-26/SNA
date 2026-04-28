@@ -56,11 +56,35 @@ export function requireAdmin(context: GraphQLContext): void { ... }  // FORBIDDE
 
 ### Audit Logging Pattern
 ```typescript
-logAudit(context, 'CREATE' | 'UPDATE', entityType, entityId, beforeJson, afterJson)
+logAudit(context, 'CREATE' | 'UPDATE' | 'ASSIGN' | 'UNASSIGN', entityType, entityId, beforeJson, afterJson)
 ```
-- Called from every admin CREATE/UPDATE mutation resolver
-- Junction-table assign/unassign mutations are NOT logged (consistent policy — applies to study_sites, site_examiners, and study_site_examiners)
-- `logAudit` fetches actor email from DB at call time
+- Called from every admin mutation resolver — including CREATE, UPDATE, ASSIGN, and UNASSIGN operations
+- Junction-table assign/unassign mutations ARE logged with action `ASSIGN` / `UNASSIGN` and entityType like `StudySite`, `SiteExaminer`, `StudySiteExaminer`
+- `logAudit` reads actor email from `context.user.email` (JWT payload) — no extra DB lookup needed
+- `audit_logs` table action CHECK constraint includes `('CREATE','UPDATE','ASSIGN','UNASSIGN')`
+- Migration shim in `migrate.ts` recreates the audit_logs table if the old CHECK constraint rejects ASSIGN
+
+### Audit Log Entity Types
+| entityType | Logged for |
+|---|---|
+| `Study` | createStudy, updateStudy |
+| `Site` | createSite, updateSite |
+| `Examiner` | createExaminer, updateExaminer |
+| `StudySite` | assignSiteToStudy, unassignSiteFromStudy |
+| `SiteExaminer` | assignExaminerToSite, unassignExaminerFromSite |
+| `StudySiteExaminer` | assignExaminerToStudySite, unassignExaminerFromStudySite |
+
+### Entity Audit History — Related Entity Types
+When viewing audit history for a specific entity, the frontend queries multiple related entityTypes to show a complete picture:
+```typescript
+const RELATED_ENTITY_TYPES: Record<string, string[]> = {
+  Study: ['Study', 'StudySite', 'StudySiteExaminer'],
+  Site: ['Site', 'SiteExaminer'],
+  Examiner: ['Examiner'],
+};
+```
+- `EntityAuditHistoryPage` and `EntityAuditLogDialog` both use `entityTypes` array variable (not single `entityType`)
+- Backend `getAuditLogs` resolver supports both `entityType` (single) and `entityTypes` (array) — array takes priority
 
 ### Zod Validation Pattern (Backend)
 ```typescript
@@ -124,11 +148,11 @@ if (code === 'BAD_USER_INPUT') {
 
 | ID | Rule | Where |
 |----|------|--------|
-| SI1 | Cannot assign a `Closed` site to a study | `studyService.assignSiteToStudy` |
+| SI1 | Cannot assign a non-Active site to a study (only Active sites allowed) | `studyService.assignSiteToStudy` |
 | SI2 | Cannot unassign a site from a study if SSE rows exist for that pair | `studyService.unassignSiteFromStudy` |
 | SI3 | Cannot assign an examiner to a `Closed` site | `siteService.assignExaminerToSite` |
 | SI4 | Cannot unassign an examiner from a site if they appear in SSE for that site | `siteService.unassignExaminerFromSite` |
-| SI5 | SSE assignment requires (study,site) in `study_sites` AND (site,examiner) in `site_examiners` | `studyService.assignExaminerToStudySite` |
+| SI5 | SSE assignment requires (study,site) in `study_sites` AND (site,examiner) in `site_examiners` AND site not Closed | `studyService.assignExaminerToStudySite` |
 
 ### GraphQL Error Codes
 | Code | When to use |
@@ -156,10 +180,19 @@ export function nextAllowedStatus(current: string): 'Active' | 'Completed' | nul
 - Create dialog: no status field shown — displays read-only "Planned" badge (same pattern as studies)
 - Edit dialog: status dropdown available; `Active` is blocked server-side if no examiners assigned (P1); `Closed` sites have dropdown disabled; Save button disabled when `!isDirty`
 - `createSite` on backend always hardcodes `'Planned'` regardless of any input
+- `nextAllowedSiteStatus()` in `siteSchemas.ts`: Planned→Active, Active→Closed, Closed→null
+
+### CRUD Dialog Stepper Pattern
+All create/edit dialogs use a 2-step MUI Stepper:
+- Studies: Create (Identity → Schedule), Edit (Details → Schedule)
+- Sites: Create (Identity → Location), Edit (Details → Location)
+- Examiners: Create (Identity → Contact), Edit (Profile → Contact)
+- Step validation via `trigger()` before advancing; error-aware step navigation on server errors
 
 ### GQL Documents in Service Files
 - All `gql` tagged template literals live in `services/` files — never in components or hooks
 - Mutations always in `adminService.ts`; queries in domain service files
+- `GLOBAL_SEARCH_QUERY` lives in `services/searchService.ts`
 
 ### Custom Hook Pattern
 ```typescript
@@ -202,18 +235,19 @@ async function onSubmit(values) {
 - `EntityAuditLogDialog` is an alternative modal variant (non-paginated, `page:1 pageSize:100`) used inline from detail pages
 - Both share `fieldLabel()`, `parseJson()`, `diffObjects()` from `utils/auditDiff.ts`
 - Routes: `/admin/studies/:id/history`, `/admin/sites/:id/history`, `/admin/examiners/:id/history`
+- Both use `RELATED_ENTITY_TYPES` map to query related junction audit entries alongside the main entity
 
 ### GET_AUDIT_LOGS_QUERY Signature
 ```typescript
 // adminService.ts — supports both paginated full-page and entity-scoped queries
-GET_AUDIT_LOGS_QUERY variables: { entityType?, entityId?, page?, pageSize? }
+GET_AUDIT_LOGS_QUERY variables: { entityType?, entityTypes?, entityId?, page?, pageSize? }
 // Returns: { total, rows: AuditLog[] }
-// AuditLogsPage (global) passes no entityId; EntityAuditHistoryPage passes entityType + entityId
+// AuditLogsPage (global) passes entityType (single); EntityAuditHistoryPage passes entityTypes (array) + entityId
 ```
 
 ### AuditLogsPage Pattern (Global)
 - Uses MUI `Table` + `TablePagination` (not DataGrid) for full control over expandable rows
-- Entity type filter dropdown (`Study` / `Site` / `Examiner` / All) resets page on change
+- Entity type filter dropdown (`Study` / `Site` / `Examiner` / `StudySite` / `SiteExaminer` / `StudySiteExaminer` / All) resets page on change
 - Accordion expand: only one row open at a time (`expandedRow` state holds single id)
 - Inline `DiffDetail` rendered via `<Collapse>` in a second `<TableRow>` immediately below
 - `summaryText()` from `utils/auditDiff.ts` generates the summary column text
@@ -234,6 +268,8 @@ export function useUrlPagination(defaultPageSize = 10): [GridPaginationModel, se
 - Per-site checkbox panel showing available examiners (from `site_examiners`) vs assigned (from `study_site_examiners`)
 - Each checkbox toggle calls `ASSIGN_EXAMINER_TO_STUDY_SITE` or `UNASSIGN_EXAMINER_FROM_STUDY_SITE`
 - `refetchQuery` passed as prop to avoid closure over stale `id`
+- `readOnly` prop set to `true` for Completed studies — shows lock banner + disables checkboxes
+- Closed sites show a message instead of checkboxes
 - Viewer equivalent (`ViewerStudySitePanel`) is read-only; only renders sites with `examiners.length > 0`
 - Study detail page header includes a "History" button linking to `/admin/studies/:id/history`
 
@@ -256,6 +292,8 @@ function showToastOnce(message, variant, key) {
 - Primary color: `#0f766e` (teal-700)
 - Button `textTransform: 'none'` and `fontWeight: 600` applied globally
 - `borderRadius: 8` set globally on `shape`
+- Font family: `'Poppins', system-ui, -apple-system, sans-serif`
+- Table head cells: `fontWeight: 700, backgroundColor: '#f8fafc'`
 
 ### Layout Pattern
 - `AdminLayout` = AppHeader + AdminSidebar + main content
@@ -265,19 +303,19 @@ function showToastOnce(message, variant, key) {
 ---
 
 ## Security Checklist
-- [ ] HttpOnly cookie for JWT — no localStorage
-- [ ] `secure: true` in production (env-conditional, evaluated at call time)
-- [ ] `sameSite: 'lax'` on auth cookie
-- [ ] `credentials: 'include'` on Apollo httpLink
-- [ ] CORS restricted to `http://localhost:5173` (update for production)
-- [ ] Passwords hashed with bcrypt (cost factor 10)
-- [ ] SQL via parameterized prepared statements only
-- [ ] Zod validation on all mutation inputs (both backend and frontend)
-- [ ] `requireAdmin` guard on all CRUD and audit mutations
-- [ ] GraphQLError with appropriate code for all failures
-- [ ] Apollo errorLink clears store before redirecting on auth failure
-- [ ] JWT_SECRET validated at startup (min 16 chars via Zod envSchema)
+- [x] HttpOnly cookie for JWT — no localStorage
+- [x] `secure: true` in production (env-conditional, evaluated at call time)
+- [x] `sameSite: 'lax'` on auth cookie
+- [x] `credentials: 'include'` on Apollo httpLink
+- [x] CORS restricted to `http://localhost:5173` (update for production)
+- [x] Passwords hashed with bcrypt (cost factor 10)
+- [x] SQL via parameterized prepared statements only
+- [x] Zod validation on all mutation inputs (both backend and frontend)
+- [x] `requireAdmin` guard on all CRUD and audit mutations
+- [x] GraphQLError with appropriate code for all failures
+- [x] Apollo errorLink clears store before redirecting on auth failure
+- [x] JWT_SECRET validated at startup (min 16 chars via Zod envSchema)
 - [ ] JWT_SECRET must be rotated before production deployment
-- [ ] No delete of core entity data (studies/sites/examiners/users) — junction unassign only
-- [ ] Study status transitions enforced server-side (S1–S9, D1–D9) — UI restrictions are defence-in-depth only
-- [ ] Pagination capped at pageSize ≤ 100 via paginationSchema in all list resolvers
+- [x] No delete of core entity data (studies/sites/examiners/users) — junction unassign only
+- [x] Study status transitions enforced server-side (S1–S9, D1–D9) — UI restrictions are defence-in-depth only
+- [x] Pagination capped at pageSize ≤ 100 via paginationSchema in all list resolvers (≤ 1000 for pickers)

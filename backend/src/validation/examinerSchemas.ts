@@ -21,3 +21,18 @@ export const updateExaminerSchema = z.object({
 
 export type CreateExaminerValidated = z.infer<typeof createExaminerSchema>;
 export type UpdateExaminerValidated = z.infer<typeof updateExaminerSchema>;
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+export const createCertificateSchema = z.object({
+  certificateId: z.string().min(1, 'Certificate ID is required').max(100).transform((v) => v.trim()),
+  expiresOn: z.string().min(1, 'Expiry date is required').regex(DATE_REGEX, 'Must be YYYY-MM-DD format'),
+});
+
+export const updateCertificateSchema = z.object({
+  certificateId: z.string().min(1, 'Certificate ID is required').max(100).transform((v) => v.trim()).optional(),
+  expiresOn: z.string().min(1, 'Expiry date is required').regex(DATE_REGEX, 'Must be YYYY-MM-DD format').optional(),
+});
+
+export type CreateCertificateValidated = z.infer<typeof createCertificateSchema>;
+export type UpdateCertificateValidated = z.infer<typeof updateCertificateSchema>;

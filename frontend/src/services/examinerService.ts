@@ -31,6 +31,7 @@ export const GET_EXAMINER_QUERY = gql`
       status
       studies { id protocolId title sponsor phase status }
       sites { id siteCode name city country status }
+      certificates { id certificateId expiresOn }
     }
   }
 `;

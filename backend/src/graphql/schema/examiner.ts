@@ -1,4 +1,10 @@
 export const examinerSchema = `#graphql
+  type ExaminerCertificate {
+    id: ID!
+    certificateId: String!
+    expiresOn: String!
+  }
+
   type Examiner {
     id: ID!
     examinerCode: String!
@@ -9,6 +15,7 @@ export const examinerSchema = `#graphql
     status: String!
     studies: [Study!]!
     sites: [Site!]!
+    certificates: [ExaminerCertificate!]!
   }
 
   type ExaminerPage {
@@ -33,6 +40,16 @@ export const examinerSchema = `#graphql
     status: String
   }
 
+  input CreateExaminerCertificateInput {
+    certificateId: String!
+    expiresOn: String!
+  }
+
+  input UpdateExaminerCertificateInput {
+    certificateId: String
+    expiresOn: String
+  }
+
   extend type Query {
     getExaminer(id: ID!): Examiner
     getExaminers(page: Int, pageSize: Int): ExaminerPage!
@@ -41,5 +58,7 @@ export const examinerSchema = `#graphql
   extend type Mutation {
     createExaminer(input: CreateExaminerInput!): Examiner!
     updateExaminer(id: ID!, input: UpdateExaminerInput!): Examiner!
+    addExaminerCertificate(examinerId: ID!, input: CreateExaminerCertificateInput!): ExaminerCertificate!
+    updateExaminerCertificate(id: ID!, input: UpdateExaminerCertificateInput!): ExaminerCertificate!
   }
 `;

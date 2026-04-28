@@ -13,6 +13,10 @@ import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
 import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import AddLinkIcon from '@mui/icons-material/AddLink';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import HistoryIcon from '@mui/icons-material/History';
@@ -33,7 +37,7 @@ import {
 } from '../../services/adminService';
 import { GET_STUDY_QUERY } from '../../services/studyService';
 import { parseGqlError } from '../../utils/gqlErrors';
-import { StudySite, Examiner } from '../../types';
+import { StudySite, StudySiteExaminer, Examiner, ExaminerCertificate } from '../../types';
 
 interface SiteOption {
   id: string;
@@ -54,6 +58,48 @@ function InfoField({ label, value }: { label: string; value: string }) {
   );
 }
 
+// ── Certificate picker helper ─────────────────────────────────────────────────
+function isCertValid(expiresOn: string): boolean {
+  return expiresOn >= new Date().toISOString().slice(0, 10);
+}
+
+function CertificatePickerDialog(
+  { examiner, onSelect, onClose }: {
+    examiner: Examiner & { certificates?: ExaminerCertificate[] };
+    onSelect: (certId: string) => void;
+    onClose: () => void;
+  }
+) {
+  const validCerts = (examiner.certificates ?? []).filter((c) => isCertValid(c.expiresOn));
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Select Certificate for {examiner.name}</DialogTitle>
+      <DialogContent>
+        {validCerts.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No valid certificates available.</Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+            {validCerts.map((cert) => (
+              <Paper
+                key={cert.id}
+                elevation={0}
+                sx={{ p: 1.5, border: '1px solid #e2e8f0', borderRadius: 1.5, cursor: 'pointer', '&:hover': { borderColor: '#0f766e', bgcolor: '#f0fdfa' } }}
+                onClick={() => onSelect(cert.id)}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{cert.certificateId}</Typography>
+                <Typography variant="caption" color="text.secondary">Expires: {cert.expiresOn}</Typography>
+              </Paper>
+            ))}
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose}>Cancel</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ── Per-site examiner assignment panel ────────────────────────────────────────
 interface StudySitePanelProps {
   studyId: string;
@@ -65,6 +111,7 @@ interface StudySitePanelProps {
 function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: StudySitePanelProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { site, examiners: assignedExaminers, availableExaminers } = studySite;
+  const [certPickerExaminer, setCertPickerExaminer] = useState<Examiner | null>(null);
 
   const [assignExaminer, { loading: assigning }] = useMutation(ASSIGN_EXAMINER_TO_STUDY_SITE, {
     refetchQueries: [refetchQuery],
@@ -76,6 +123,26 @@ function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: 
   const assignedIds = new Set(assignedExaminers.map((e) => e.id));
   const isBusy = assigning || unassigning;
 
+  // Find the assigned SSE entry for a given examiner to show its certificate
+  function getAssignedEntry(examinerId: string): StudySiteExaminer | undefined {
+    return assignedExaminers.find((e) => e.id === examinerId);
+  }
+
+  async function doAssign(examinerId: string, certificateId?: string) {
+    try {
+      await assignExaminer({ variables: { studyId, siteId: site.id, examinerId, certificateId } });
+      const ex = availableExaminers.find((e) => e.id === examinerId);
+      enqueueSnackbar(`${ex?.name ?? 'Examiner'} assigned to study at ${site.name}.`, { variant: 'success' });
+    } catch (err: unknown) {
+      const { code, message } = parseGqlError(err);
+      if (code === 'BAD_USER_INPUT') {
+        enqueueSnackbar('Please fix validation errors: ' + message, { variant: 'warning' });
+      } else {
+        enqueueSnackbar(message || 'Operation failed.', { variant: 'error' });
+      }
+    }
+  }
+
   async function handleToggle(examiner: Examiner, currentlyAssigned: boolean) {
     if (readOnly) {
       enqueueSnackbar('Completed studies are locked — examiner assignments cannot be changed.', { variant: 'warning' });
@@ -86,8 +153,13 @@ function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: 
         await unassignExaminer({ variables: { studyId, siteId: site.id, examinerId: examiner.id } });
         enqueueSnackbar(`${examiner.name} unassigned from study at ${site.name}.`, { variant: 'info' });
       } else {
-        await assignExaminer({ variables: { studyId, siteId: site.id, examinerId: examiner.id } });
-        enqueueSnackbar(`${examiner.name} assigned to study at ${site.name}.`, { variant: 'success' });
+        // Show certificate picker if valid certs exist; otherwise let backend reject
+        const validCerts = (examiner.certificates ?? []).filter((c) => isCertValid(c.expiresOn));
+        if (validCerts.length >= 1) {
+          setCertPickerExaminer(examiner);
+          return;
+        }
+        await doAssign(examiner.id);
       }
     } catch (err: unknown) {
       const { code, message } = parseGqlError(err);
@@ -97,6 +169,12 @@ function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: 
         enqueueSnackbar(message || 'Operation failed.', { variant: 'error' });
       }
     }
+  }
+
+  async function handleCertSelected(certId: string) {
+    if (!certPickerExaminer) return;
+    setCertPickerExaminer(null);
+    await doAssign(certPickerExaminer.id, certId);
   }
 
   return (
@@ -130,6 +208,7 @@ function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: 
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {availableExaminers.map((examiner) => {
             const isAssigned = assignedIds.has(examiner.id);
+            const sseEntry = getAssignedEntry(examiner.id);
             return (
               <Paper
                 key={examiner.id}
@@ -162,6 +241,11 @@ function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: 
                       <Typography variant="caption" color="text.secondary">
                         {examiner.examinerCode} · {examiner.role}
                       </Typography>
+                      {isAssigned && sseEntry?.certificate && (
+                        <Typography variant="caption" sx={{ display: 'block', color: '#0f766e', fontWeight: 600, mt: 0.3 }}>
+                          Cert: {sseEntry.certificate.certificateId} (exp {sseEntry.certificate.expiresOn})
+                        </Typography>
+                      )}
                     </Box>
                   }
                   sx={{ m: 0, width: '100%' }}
@@ -170,6 +254,14 @@ function StudySitePanel({ studyId, studySite, refetchQuery, readOnly = false }: 
             );
           })}
         </Box>
+      )}
+
+      {certPickerExaminer && (
+        <CertificatePickerDialog
+          examiner={certPickerExaminer}
+          onSelect={handleCertSelected}
+          onClose={() => setCertPickerExaminer(null)}
+        />
       )}
     </Paper>
   );
@@ -203,8 +295,9 @@ export function AdminStudyDetailPage() {
       await assignSite({ variables: { studyId: id, siteId: selectedSite.id } });
       enqueueSnackbar(`${selectedSite.name} assigned to study.`, { variant: 'success' });
       setSelectedSite(null);
-    } catch {
-      enqueueSnackbar('Failed to assign site.', { variant: 'error' });
+    } catch (err: unknown) {
+      const { message } = parseGqlError(err);
+      enqueueSnackbar(message || 'Failed to assign site.', { variant: 'error' });
     }
   }
 
@@ -216,8 +309,9 @@ export function AdminStudyDetailPage() {
     try {
       await unassignSite({ variables: { studyId: id, siteId } });
       enqueueSnackbar(`${siteName} unassigned from study.`, { variant: 'info' });
-    } catch {
-      enqueueSnackbar('Failed to unassign site.', { variant: 'error' });
+    } catch (err: unknown) {
+      const { message } = parseGqlError(err);
+      enqueueSnackbar(message || 'Failed to unassign site.', { variant: 'error' });
     }
   }
 
