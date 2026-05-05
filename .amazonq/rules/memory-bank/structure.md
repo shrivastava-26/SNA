@@ -11,6 +11,7 @@ SNA-y2/
 │   ├── refresh-smoke.spec.ts    # Playwright: clear auth_token → verify refresh or redirect
 │   └── viewer-smoke.spec.ts     # Playwright: login as viewer, navigate studies, verify read-only
 ├── playwright.config.ts         # Playwright config: chromium, webServer for backend+frontend, 60s timeout
+├── playwright.slow.config.ts    # Extends playwright.config: headless:false + slowMo:500 (demo mode)
 ├── package.json                 # Root package: @playwright/test devDep, test:e2e scripts
 ├── backend/
 │   ├── data/app.db              # SQLite database (auto-created)
@@ -114,16 +115,19 @@ SNA-y2/
     │   │   │   ├── DashboardSkeleton.tsx  # Loading skeleton for dashboard (stat cards, charts, recent studies, country list)
     │   │   │   ├── DetailPageSkeleton.tsx # Loading skeleton for detail pages (configurable infoFields + relatedSections)
     │   │   │   └── index.ts               # Re-exports DashboardSkeleton, DetailPageSkeleton
+    │   │   ├── study/
+    │   │   │   ├── CertificatePickerDialog.tsx  # Dialog to select a valid certificate when assigning examiner to study site
+    │   │   │   ├── StudySitePanel.tsx           # Per-site examiner checkbox panel for AdminStudyDetailPage
+    │   │   │   └── index.ts                     # Re-exports CertificatePickerDialog, StudySitePanel
     │   │   ├── AdminRoute.tsx         # Auth guard: must be logged in AND role === 'ADMIN'
     │   │   ├── AppFooter.tsx          # Copyright footer
     │   │   ├── AppHeader.tsx          # Fixed AppBar with user avatar + logout
     │   │   ├── DetailPageHeader.tsx   # Back button + title + badge + StatusChip (always uses navigate(-1))
     │   │   ├── EmptyState.tsx         # Dashed-border empty placeholder
     │   │   ├── EntityAuditLogDialog.tsx  # Modal dialog showing paginated change history for a specific entity (before→after diff, uses entityTypes array)
-    │   │   ├── Layout.tsx             # Legacy layout (kept for compatibility)
+    │   │   ├── InfoField.tsx          # Reusable label+value display component used in detail pages
     │   │   ├── ProtectedRoute.tsx     # Auth guard: must be logged in (any role)
     │   │   ├── RelatedDataGrid.tsx    # Title + count chip + DataGrid or EmptyState
-    │   │   ├── Sidebar.tsx            # Legacy sidebar (kept for compatibility)
     │   │   ├── StatusChip.tsx         # MUI Chip: Active/Planned/Completed/Closed/Inactive
     │   │   └── TableSkeleton.tsx      # Loading skeleton for DataGrid
     │   ├── contexts/
@@ -165,7 +169,7 @@ SNA-y2/
     │   │   │   └── SearchPage.tsx         # ViewerSearchPage — thin wrapper → shared SearchPage with ViewerLayout
     │   │   ├── shared/
     │   │   │   └── SearchPage.tsx         # SearchPage — debounced keyword, entity toggle, context filters, useLazyQuery, filter-only search support
-    │   │   └── (legacy flat pages kept for compatibility: DashboardPage, StudyPage, SitePage, ExaminerPage, StudyDetailPage, SiteDetailPage, ExaminerDetailPage, LoginPage)
+    │   └── LoginPage.tsx              # Login form (react-hook-form + Zod, default credentials pre-filled)
     │   ├── services/
     │   │   ├── authService.ts       # ME_QUERY (includes role), LOGIN_MUTATION, LOGOUT_MUTATION
     │   │   ├── studyService.ts      # GET_STUDIES_QUERY (paginated), GET_STUDY_QUERY (with studySites/examiners/sites), GET_SITES_PICKER_QUERY
@@ -177,32 +181,35 @@ SNA-y2/
     │   ├── utils/
     │   │   ├── apolloClient.ts      # ApolloClient with errorLink (UNAUTHENTICATED → /login, FORBIDDEN toast, INTERNAL_SERVER_ERROR toast) + httpLink
     │   │   ├── auditDiff.ts         # FIELD_LABELS, fieldLabel(), parseJson(), diffObjects(), summaryText() — shared by AuditLogsPage + EntityAuditHistoryPage + EntityAuditLogDialog
-    │   │   └── gqlErrors.ts         # parseGqlError — extracts code, message, fieldErrors from ApolloError
+    │   │   ├── gqlErrors.ts         # parseGqlError — extracts code, message, fieldErrors from ApolloError
+    │   │   └── shared.ts            # stepperSx (shared MUI Stepper styles), isCertValid(expiresOn) helper
     │   ├── validation/
     │   │   ├── index.ts             # Re-exports all frontend schemas
     │   │   ├── authSchemas.ts       # loginSchema, LoginFormValues
     │   │   ├── studySchemas.ts      # createStudySchema, updateStudySchema (date-range refine), nextAllowedStatus(), todayLocal()
     │   │   ├── siteSchemas.ts       # createSiteSchema, updateSiteSchema, nextAllowedSiteStatus()
     │   │   └── examinerSchemas.ts   # createExaminerSchema, updateExaminerSchema, createCertificateSchema, updateCertificateSchema, CreateCertificateFormValues, UpdateCertificateFormValues
-    │   ├── App.tsx                  # Router: /admin/* (AdminRoute) + /viewer/* (ProtectedRoute) + legacy redirects
+    │   ├── App.tsx                  # Router: /admin/* (AdminRoute) + /viewer/* (ProtectedRoute) + legacy redirects to /viewer/*
     │   ├── main.tsx                 # React DOM entry point (wraps with SnackbarProvider)
     │   ├── theme.ts                 # MUI theme (teal palette, borderRadius 8, Poppins font, button overrides)
     │   └── vite-env.d.ts
     │   ├── __tests__/
-    │   │   ├── AdminExaminerDetailPage.test.tsx  # Component test: examiner details, cert table, Add Certificate dialog, mutation + success/error toasts
-    │   │   ├── AdminRoute.test.tsx               # Unit test: AdminRoute redirects non-admin users
-    │   │   ├── AdminSiteDetailPage.test.tsx      # Component test: site details, assigned examiners, linked studies, History button, Assign section, unassign mutation
-    │   │   ├── AdminSitesPage.test.tsx           # Component test: heading + New Site button, DataGrid rows, Create dialog 2-step (Identity→Location), create mutation + success toast, Planned badge
-    │   │   ├── AdminStudyDetailPage.test.tsx     # Component test: StudySitePanel checkboxes, CertificatePickerDialog, assign/unassign mutations, Completed lock banner
-    │   │   ├── AuditLogsPage.test.tsx            # Component test: heading + filter dropdown, audit rows render, expand row shows diff detail, empty state message
-    │   │   ├── ErrorBoundary.test.tsx            # Unit test: ErrorBoundary renders fallback on error
-    │   │   ├── login.smoke.test.tsx              # Smoke test: LoginPage renders and accepts input
-    │   │   ├── ProtectedRoute.test.tsx           # Unit test: ProtectedRoute redirects unauthenticated users
-    │   │   ├── SearchPage.test.tsx               # Component test: idle state, single-char hint, debounce timing, query results, empty state, result count
-    │   │   ├── ViewerDashboardPage.test.tsx      # Component test: heading, stat cards, chart sections, Recent Studies, Sites by Country, no specialty chart (viewer-only)
-    │   │   ├── ViewerStudiesPage.test.tsx        # Component test: heading, study rows, read-only (no Create/Edit), row click navigation, error alert
-    │   │   ├── ViewerStudyDetailPage.test.tsx    # Component test: study details, per-site examiner breakdown, no CRUD buttons, no checkboxes, certificate info inline
-    │   │   └── setup.ts                          # Vitest setup: @testing-library/jest-dom matchers
+    │   │   ├── integration/
+    │   │   │   ├── AdminExaminerDetailPage.test.tsx  # Component test: examiner details, cert table, Add Certificate dialog, mutation + success/error toasts
+    │   │   │   ├── AdminSiteDetailPage.test.tsx      # Component test: site details, assigned examiners, linked studies, History button, Assign section, unassign mutation
+    │   │   │   ├── AdminSitesPage.test.tsx           # Component test: heading + New Site button, DataGrid rows, Create dialog 2-step (Identity→Location), create mutation + success toast, Planned badge
+    │   │   │   ├── AdminStudyDetailPage.test.tsx     # Component test: StudySitePanel checkboxes, CertificatePickerDialog, assign/unassign mutations, Completed lock banner
+    │   │   │   ├── AuditLogsPage.test.tsx            # Component test: heading + filter dropdown, audit rows render, expand row shows diff detail, empty state message
+    │   │   │   ├── SearchPage.test.tsx               # Component test: idle state, single-char hint, debounce timing, query results, empty state, result count
+    │   │   │   ├── ViewerDashboardPage.test.tsx      # Component test: heading, stat cards, chart sections, Recent Studies, Sites by Country, no specialty chart (viewer-only)
+    │   │   │   ├── ViewerStudiesPage.test.tsx        # Component test: heading, study rows, read-only (no Create/Edit), row click navigation, error alert
+    │   │   │   └── ViewerStudyDetailPage.test.tsx    # Component test: study details, per-site examiner breakdown, no CRUD buttons, no checkboxes, certificate info inline
+    │   │   ├── unit/
+    │   │   │   ├── AdminRoute.test.tsx               # Unit test: AdminRoute redirects non-admin users
+    │   │   │   ├── ErrorBoundary.test.tsx            # Unit test: ErrorBoundary renders fallback on error
+    │   │   │   ├── login.smoke.test.tsx              # Smoke test: LoginPage renders and accepts input
+    │   │   │   └── ProtectedRoute.test.tsx           # Unit test: ProtectedRoute redirects unauthenticated users
+    │   │   └── setup.ts                              # Vitest setup: @testing-library/jest-dom matchers
     ├── .env                         # VITE_GRAPHQL_URL=http://localhost:4040/graphql
     ├── index.html
     ├── package.json
@@ -327,7 +334,7 @@ Apollo errorLink:
 - Domain rules enforced in services (e.g. site cannot be Active without examiners; auto-downgrade on last unassign)
 - `study_site_examiners` (SSE) 3-way junction + `certificate_id`: tracks which examiners participate in a study at a specific site, linked to the certificate used at assignment time
 - `examiner_certificates` table: each examiner can have multiple certificates; `hasValidCertificate` checked before assigning to site or study; `assignExaminerToSite` and `assignExaminerToStudySite` both enforce valid cert
-- `CertificatePickerDialog` in `StudyDetailPage`: shown when assigning an examiner with ≥1 valid cert; allows explicit cert selection
+- `CertificatePickerDialog` in `components/study/`: shown when assigning an examiner with ≥1 valid cert; allows explicit cert selection; `StudySitePanel` also lives in `components/study/`, both exported via barrel `index.ts`
 - `AdminExaminerDetailPage` has full certificate management: table showing Valid/Expired status chips, Add Certificate dialog, Edit Certificate dialog
 - Audit entity type `ExaminerCertificate` logged for `addExaminerCertificate` (CREATE) and `updateExaminerCertificate` (UPDATE)
 - `getStudySitesWithStudyExaminers` uses bulk queries + in-memory grouping to avoid N+1 for SSE data
@@ -337,7 +344,7 @@ Apollo errorLink:
 - `DashboardSkeleton` and `DetailPageSkeleton` (configurable `infoFields` + `relatedSections`) used across all detail/dashboard pages
 - `useUrlPagination` hook persists page+pageSize in URL query params — used by all admin list pages so back button restores exact pagination state
 - `AuditLogsPage` uses MUI `Table`+`TablePagination` (not DataGrid) for accordion-style expandable rows with inline diff panels
-- `utils/auditDiff.ts` centralises `FIELD_LABELS`, `diffObjects`, `summaryText` — shared by `AuditLogsPage`, `EntityAuditHistoryPage`, and `EntityAuditLogDialog`
+- `utils/shared.ts` centralises `stepperSx` (MUI Stepper styles) and `isCertValid(expiresOn)` — imported by CRUD dialogs and certificate-related components
 - Edit dialogs disable Save button when `!isDirty` (react-hook-form `formState.isDirty`)
 - Study detail page header includes a "History" button navigating to `/admin/studies/:id/history`
 - All CRUD dialogs use 2-step MUI Stepper pattern for better UX

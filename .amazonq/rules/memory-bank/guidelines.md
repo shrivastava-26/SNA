@@ -270,9 +270,10 @@ export function useUrlPagination(defaultPageSize = 10): [GridPaginationModel, se
 - Allows browser back button to restore exact pagination state
 
 ### StudySitePanel Pattern (Admin Study Detail)
+- Lives in `components/study/StudySitePanel.tsx`; exported via `components/study/index.ts` barrel
 - Per-site checkbox panel showing available examiners (from `site_examiners`) vs assigned (from `study_site_examiners`)
 - Each checkbox toggle calls `ASSIGN_EXAMINER_TO_STUDY_SITE` or `UNASSIGN_EXAMINER_FROM_STUDY_SITE`
-- `CertificatePickerDialog` shown when assigning an examiner with ≥1 valid cert — user selects which cert to link; if no valid certs, backend rejects with `BAD_USER_INPUT`
+- `CertificatePickerDialog` (in `components/study/CertificatePickerDialog.tsx`) shown when assigning an examiner with ≥1 valid cert — user selects which cert to link; if no valid certs, backend rejects with `BAD_USER_INPUT`
 - Assigned examiner cards show the linked certificate ID + expiry inline
 - `refetchQuery` passed as prop to avoid closure over stale `id`
 - `readOnly` prop set to `true` for Completed studies — shows lock banner + disables checkboxes
@@ -285,7 +286,8 @@ export function useUrlPagination(defaultPageSize = 10): [GridPaginationModel, se
 - `AddCertificateDialog`: react-hook-form + `createCertificateSchema` (frontend Zod) — fields: `certificateId`, `expiresOn` (date input)
 - `EditCertificateDialog`: react-hook-form + `updateCertificateSchema` — Save disabled when `!isDirty`
 - Both dialogs refetch `GET_EXAMINER_QUERY` on success
-- `isCertValid(expiresOn)` helper: `expiresOn >= today` (ISO date string comparison)
+- `isCertValid(expiresOn)` helper in `utils/shared.ts`: `expiresOn >= today` (ISO date string comparison)
+- `stepperSx` constant in `utils/shared.ts`: shared MUI Stepper styles used by all CRUD dialogs
 
 ### Apollo errorLink Deduplication
 ```typescript
