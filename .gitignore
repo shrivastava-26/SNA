@@ -23,5 +23,13 @@ Thumbs.db
 .vscode/
 .idea/
 
+# ── Test coverage reports ─────────────────────────────────────────────────
+backend/coverage/
+frontend/coverage/
+
+# ── Playwright (E2E) results & reports ────────────────────────────────────
+test-results/
+playwright-report/
+
 # ── TypeScript cache ──────────────────────────────────────────────────────
 *.tsbuildinfo
